@@ -14,6 +14,7 @@ from core.tools.openshot.export_tools import get_export_tools
 from core.tools.openshot.clip_tools import get_clip_tools
 from core.tools.openshot.search_clip_tools import get_search_clip_tools
 from core.tools.openshot.video_gen_tools import get_video_gen_tools
+from core.tools.openshot.transitions_tools import get_transitions_tools
 
 
 def get_all_openshot_tools():
@@ -26,6 +27,7 @@ def get_all_openshot_tools():
     tools.extend(get_clip_tools())
     tools.extend(get_search_clip_tools())
     tools.extend(get_video_gen_tools())
+    tools.extend(get_transitions_tools())
     return tools
 
 
@@ -69,6 +71,24 @@ FRONTEND_TOOL_NAMES = {
     "slice_selected_clip_at_best_match_tool",
     # video_gen_tools
     "generate_video_and_add_to_timeline_tool",
-    "insert_vidu_v2v_clip_into_selected_clip_tool",
+    "insert_kling_v2v_clip_into_selected_clip_tool",
     "generate_transition_clip_tool",
+    # transitions_tools
+    "list_transitions_tool",
+    "search_transitions_tool",
+    "add_transition_between_clips_tool",
+    "add_transition_to_clip_tool",
+    # music_tools (frontend-delegated: timeline insertion)
+    "add_music_to_timeline_tool",
+    # tts_tools (frontend-delegated: timeline insertion)
+    "add_tts_audio_to_timeline_tool",
+    # director_tools (frontend-delegated: project analysis via Qt)
+    "analyze_timeline_structure_tool",
+    "analyze_pacing_tool",
+    "analyze_audio_levels_tool",
+    "analyze_transitions_tool",
+    "analyze_clip_content_tool",
+    "analyze_music_sync_tool",
+    "get_project_metadata_tool",
+    "analyze_clip_visual_content_tool",
 }

@@ -1,12 +1,12 @@
 """
-Server-side video generation tools (Runware/Vidu).
+Server-side video generation tools (Runware/Kling).
 """
 
 from logger import log
 
 
 def generate_video(prompt: str, duration_seconds: int = 4, resolution: str = "720p") -> str:
-    """Generate a video using Runware/Vidu API."""
+    """Generate a video using Runware/Kling API."""
     try:
         from core.generation.runware_client import runware_generate_video, download_video_to_path
         from config import get_settings

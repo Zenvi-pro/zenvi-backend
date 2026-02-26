@@ -38,8 +38,24 @@ class Settings(BaseSettings):
     # TwelveLabs
     twelvelabs_api_key: str = Field(default="", alias="TWELVELABS_API_KEY")
 
-    # Runware (video generation)
+    # Runware (video generation — Kling)
     runware_api_key: str = Field(default="", alias="RUNWARE_API_KEY")
+
+    # Perplexity (research agent)
+    perplexity_api_key: str = Field(default="", alias="PERPLEXITY_API_KEY")
+
+    # GitHub (product launch agent)
+    github_token: str = Field(default="", alias="GITHUB_TOKEN")
+
+    # Suno (music agent)
+    suno_token: str = Field(default="", alias="SUNO_TOKEN")
+
+    # NVIDIA Edge Device
+    nvidia_edge_url: str = Field(default="", alias="NVIDIA_EDGE_URL")
+
+    # Remotion rendering services
+    remotion_url: str = Field(default="http://localhost:4500/api/v1", alias="REMOTION_URL")
+    remotion_product_launch_url: str = Field(default="http://localhost:3100", alias="REMOTION_PRODUCT_LAUNCH_URL")
 
     # Agent config
     agent_max_iterations: int = Field(default=15, alias="ZENVI_AGENT_MAX_ITERATIONS")
@@ -58,6 +74,12 @@ class Settings(BaseSettings):
             "google-api-key": self.google_api_key,
             "twelvelabs-api-key": self.twelvelabs_api_key,
             "runware-api-key": self.runware_api_key,
+            "perplexity-api-key": self.perplexity_api_key,
+            "github-token": self.github_token,
+            "suno-token": self.suno_token,
+            "nvidia-edge-url": self.nvidia_edge_url,
+            "remotion-url": self.remotion_url,
+            "remotion-product-launch-url": self.remotion_product_launch_url,
             "ai-default-model": self.default_model,
             "aws-access-key-id": self.aws_access_key_id,
             "aws-secret-access-key": self.aws_secret_access_key,

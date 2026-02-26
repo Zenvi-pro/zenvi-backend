@@ -140,17 +140,53 @@ class IndexResultSchema(BaseModel):
 # ---- Video Generation ----
 class GenerateVideoRequest(BaseModel):
     prompt: str
-    duration_seconds: int = 4
-    model: str = "vidu:3@2"
-    width: int = 640
-    height: int = 352
-    negative_prompt: Optional[str] = None
-    fps: Optional[int] = 24
+    duration_seconds: int = 5
+    model: str = "klingai:kling@o1"
+    width: int = 1280
+    height: int = 720
+    input_video_url: Optional[str] = None
+
+
+class GenerateMorphVideoRequest(BaseModel):
+    prompt: str
+    start_image_url: str
+    end_image_url: str
+    duration_seconds: int = 5
+    model: str = "klingai:kling@o1"
+    width: int = 1280
+    height: int = 720
 
 
 class GenerateVideoResponse(BaseModel):
     video_url: Optional[str] = None
     local_path: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ResearchRequest(BaseModel):
+    query: str
+    max_images: int = 3
+    search_domain_filter: Optional[str] = None
+    search_recency_filter: Optional[str] = None
+    content_type: Optional[str] = "video"
+    aspects: Optional[str] = ""
+    timeout_seconds: float = 120.0
+
+
+class ResearchResponse(BaseModel):
+    result: str = ""
+    error: Optional[str] = None
+
+
+class GitHubRepoRequest(BaseModel):
+    repo_url: str
+
+
+class GitHubRepoResponse(BaseModel):
+    repo_info: Optional[Dict[str, Any]] = None
+    readme: str = ""
+    owner: str = ""
+    repo: str = ""
     error: Optional[str] = None
 
 

@@ -1,6 +1,6 @@
 """
-Runware API client for video generation (Vidu).
-Ported from zenvi-core verbatim — no Qt, thread-safe.
+Runware API client for video generation (Kling).
+Ported from zenvi-core — no Qt, thread-safe.
 """
 
 import base64
@@ -13,20 +13,6 @@ RUNWARE_API_BASE = "https://api.runware.ai/v1"
 POLL_INTERVAL_INITIAL = 2.0
 POLL_INTERVAL_MAX = 15.0
 POLL_TIMEOUT_SECONDS = 300
-
-
-def _model_supports_fps(model: str) -> bool:
-    m = (model or "").strip().lower()
-    if m.startswith("vidu:2@"):
-        return False
-    return True
-
-
-def _model_supports_seed_video(model: str) -> bool:
-    m = (model or "").strip().lower()
-    if m.startswith("vidu:2@"):
-        return False
-    return True
 
 
 def _try_parse_runware_error(body_text: str) -> dict:
@@ -92,34 +78,39 @@ def _poll_runware_task_rest(api_key: str, task_uuid: str, *, timeout_seconds: fl
 def runware_generate_video(
     api_key,
     prompt,
-    duration_seconds=4,
-    model="vidu:3@2",
-    width=640,
-    height=352,
-    *,
-    negative_prompt=None,
-    fps=24,
-    seed_video=None,
-    strength=None,
-    frame_images=None,
-    reference_videos=None,
+    duration_seconds=5,
+    model="klingai:kling@o1",
+    width=1280,
+    height=720,
+    input_video_url=None,
 ):
-    """Generate video via Runware. Returns (video_url, None) or (None, error_message)."""
+    """
+    Generate video via Runware. Prefers the official SDK (WebSocket); falls back to REST.
+    
+    Args:
+        api_key: Runware API key
+        prompt: Text prompt describing the video
+        duration_seconds: Duration of the video (1-10 seconds)
+        model: Kling model identifier (default: klingai:kling@o1)
+        width: Output width
+        height: Output height
+        input_video_url: Optional URL of an input video for video-to-video generation.
+                         If provided, the model should support it (e.g. Kling O1 video-edit).
+    Returns:
+        (video_url, None) on success, or (None, error_message) on failure.
+    """
     if not api_key or not str(api_key).strip():
-        return None, "Video generation is not configured. Add your Runware API key."
+        return None, "Video generation is not configured. Add your Runware API key in Preferences."
     prompt = (prompt or "").strip()
     if len(prompt) < 2:
         return None, "Prompt must be at least 2 characters."
     api_key = api_key.strip()
-    duration_int = int(max(1, min(10, duration_seconds)))
-    if not _model_supports_seed_video(model):
-        seed_video = None
-        strength = None
+    duration_int = float(max(1, min(10, duration_seconds)))
 
     # Try SDK first
     try:
         from runware import Runware, IVideoInference
-        from runware.types import IAsyncTaskResponse
+        from runware.types import IAsyncTaskResponse, IVideoInputs
         import asyncio
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -127,23 +118,26 @@ def runware_generate_video(
         try:
             rw = Runware(api_key=api_key, timeout=POLL_TIMEOUT_SECONDS)
             loop.run_until_complete(rw.connect())
-            req_kwargs = {
-                "positivePrompt": prompt, "model": model, "duration": duration_int,
-                "width": int(width), "height": int(height), "deliveryMethod": "async",
-            }
-            if negative_prompt:
-                req_kwargs["negativePrompt"] = str(negative_prompt)
-            if fps is not None and _model_supports_fps(model):
-                req_kwargs["fps"] = int(fps)
-            if seed_video:
-                req_kwargs["seedVideo"] = seed_video
-            if strength is not None:
-                req_kwargs["strength"] = float(strength)
-            if frame_images:
-                req_kwargs["frameImages"] = frame_images
-            if reference_videos:
-                req_kwargs["referenceVideos"] = reference_videos
+            
+            # Construct request
+            req_kwargs = dict(
+                positivePrompt=prompt,
+                model=model,
+                deliveryMethod="async",
+            )
+            # Kling O1 video-edit: duration is inferred from input video
+            if not input_video_url:
+                req_kwargs["duration"] = duration_int
+            if width is not None:
+                req_kwargs["width"] = int(width)
+            if height is not None:
+                req_kwargs["height"] = int(height)
             req = IVideoInference(**req_kwargs)
+            
+            # Add input video for video-to-video generation (Kling O1 video-edit workflow)
+            if input_video_url:
+                req.inputs = IVideoInputs(video=input_video_url)
+            
             result = loop.run_until_complete(rw.videoInference(requestVideo=req))
             task_uuid = getattr(result, "taskUUID", None) or getattr(result, "task_uuid", None)
             if not task_uuid:
@@ -178,21 +172,16 @@ def runware_generate_video(
     headers = {"Content-Type": "application/json"}
     task = {
         "taskType": "videoInference", "taskUUID": task_uuid, "positivePrompt": prompt,
-        "model": model, "duration": float(duration_int), "width": int(width),
-        "height": int(height), "deliveryMethod": "async", "outputFormat": "MP4", "outputQuality": 95,
+        "model": model, "outputFormat": "MP4", "deliveryMethod": "async",
     }
-    if fps is not None and _model_supports_fps(model):
-        task["fps"] = int(fps)
-    if negative_prompt:
-        task["negativePrompt"] = str(negative_prompt)
-    if seed_video:
-        task["seedVideo"] = seed_video
-    if strength is not None:
-        task["strength"] = float(strength)
-    if frame_images:
-        task["frameImages"] = frame_images
-    if reference_videos:
-        task["referenceVideos"] = reference_videos
+    if not input_video_url:
+        task["duration"] = float(duration_int)
+    if width is not None:
+        task["width"] = int(width)
+    if height is not None:
+        task["height"] = int(height)
+    if input_video_url:
+        task["inputs"] = {"video": input_video_url}
     payload = [{"taskType": "authentication", "apiKey": api_key}, task]
     try:
         r = requests.post(RUNWARE_API_BASE, headers=headers, json=payload, timeout=120)
@@ -207,8 +196,25 @@ def runware_generate_video(
 
 
 def download_video_to_path(video_url, local_path):
+    """
+    Download video from URL to local path, or copy if it's already a local file.
+    
+    Returns:
+        (True, None) on success, (False, error_message) on failure.
+    """
     if not video_url or not local_path:
         return False, "Missing URL or path."
+
+    # Handle local file paths
+    import os
+    if os.path.isfile(video_url):
+        try:
+            import shutil
+            shutil.copy2(video_url, local_path)
+            return True, None
+        except OSError as e:
+            return False, f"Failed to copy local video: {e}"
+
     try:
         import requests
     except ImportError:
@@ -221,6 +227,126 @@ def download_video_to_path(video_url, local_path):
                 if chunk:
                     f.write(chunk)
         return True, None
-    except Exception as e:
+    except requests.RequestException as e:
         log.error("Download failed: %s", e)
         return False, f"Download failed: {e}."
+    except OSError as e:
+        log.error("Write failed: %s", e)
+        return False, f"Could not write file: {e}."
+
+
+def runware_generate_morph_video(
+    api_key,
+    prompt,
+    start_image_url,
+    end_image_url,
+    duration_seconds=5,
+    model="klingai:kling@o1",
+    width=1280,
+    height=720,
+):
+    """
+    Generate a morph/transition video using Kling with start and end frame images.
+    The model generates a video that smoothly transitions from start_image to end_image.
+
+    Args:
+        api_key: Runware API key
+        prompt: Text prompt describing the transition
+        start_image_url: Public URL of the first frame (start of transition)
+        end_image_url: Public URL of the last frame (end of transition)
+        duration_seconds: Duration of the generated video (float, 1-10)
+        model: Kling model identifier
+        width: Output width (None to let model decide)
+        height: Output height (None to let model decide)
+
+    Returns:
+        (video_url, None) on success, or (None, error_message) on failure.
+    """
+    if not api_key or not str(api_key).strip():
+        return None, "Runware API key not configured."
+    if not start_image_url or not end_image_url:
+        return None, "Both start and end image URLs are required for morph transition."
+    prompt = (prompt or "").strip()
+    if len(prompt) < 2:
+        return None, "Prompt must be at least 2 characters."
+
+    api_key = api_key.strip()
+    duration_val = int(max(1, min(10, duration_seconds)))
+
+    try:
+        from runware import Runware, IVideoInference
+        from runware.types import IAsyncTaskResponse, IVideoInputs, IInputFrame
+        import asyncio
+
+        log.info("Morph transition: model=%s duration=%d start=%s end=%s",
+                 model, duration_val, start_image_url[:60], end_image_url[:60])
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        rw = None
+        try:
+            rw = Runware(api_key=api_key, timeout=POLL_TIMEOUT_SECONDS)
+            loop.run_until_complete(rw.connect())
+
+            # Kling O1 only supports specific resolutions
+            SUPPORTED_DIMS = [(1920, 1080), (1080, 1920), (1440, 1440)]
+
+            def _pick_best_resolution(w, h):
+                """Pick the closest supported resolution based on aspect ratio."""
+                if w is None or h is None:
+                    return 1920, 1080  # default landscape
+                aspect = w / max(h, 1)
+                if aspect > 1.2:
+                    return 1920, 1080   # landscape
+                elif aspect < 0.8:
+                    return 1080, 1920   # portrait
+                else:
+                    return 1440, 1440   # square-ish
+
+            res_w, res_h = _pick_best_resolution(width, height)
+            log.info("Morph: using resolution %dx%d", res_w, res_h)
+
+            # Kling O1 requires frame images via inputs.frameImages (not top-level)
+            # Dimensions are inferred from the input images — width/height not supported
+            inputs_obj = IVideoInputs(
+                frameImages=[
+                    IInputFrame(image=start_image_url, frame="first"),
+                    IInputFrame(image=end_image_url, frame="last"),
+                ],
+            )
+
+            req_kwargs = dict(
+                positivePrompt=prompt,
+                model=model,
+                duration=duration_val,
+                deliveryMethod="async",
+                inputs=inputs_obj,
+            )
+
+            req = IVideoInference(**req_kwargs)
+            result = loop.run_until_complete(rw.videoInference(requestVideo=req))
+
+            task_uuid = None
+            if isinstance(result, IAsyncTaskResponse):
+                task_uuid = getattr(result, "taskUUID", None) or getattr(result, "task_uuid", None)
+            if not task_uuid:
+                return None, "Runware SDK did not return a task UUID for morph."
+
+            videos = loop.run_until_complete(rw.getResponse(task_uuid, numberResults=1))
+            if videos and len(videos) > 0 and getattr(videos[0], "videoURL", None):
+                url = videos[0].videoURL
+                log.info("Morph transition video generated: %s", url[:80] if url else None)
+                return url, None
+            return None, "Runware SDK returned no video URL for morph."
+        finally:
+            if rw is not None:
+                try:
+                    loop.run_until_complete(rw.disconnect())
+                except Exception:
+                    pass
+            loop.close()
+    except ImportError:
+        return None, "Runware SDK is required for morph transitions. Install with: pip install runware"
+    except Exception as e:
+        log.error("Morph transition failed: %s", e, exc_info=True)
+        return None, f"Morph transition failed: {e}."

@@ -158,7 +158,7 @@ def run_agent_with_tools(
 
                 # Terminal tools — return immediately
                 _TERMINAL_TOOLS = {
-                    "insert_vidu_v2v_clip_into_selected_clip_tool",
+                    "insert_kling_v2v_clip_into_selected_clip_tool",
                     "generate_video_and_add_to_timeline_tool",
                     "generate_transition_clip_tool",
                     "generate_manim_video_tool",

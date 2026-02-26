@@ -19,13 +19,13 @@ def generate_video_and_add_to_timeline_tool(
     position_seconds: str = "",
     track: str = "",
 ) -> str:
-    """Generate a brand-new standalone video from a text prompt using AI (Runware/Vidu) and add it to the timeline. ONLY use this tool when the user wants to create an entirely new video from scratch (no existing clip involved). Do NOT use this tool when the user says 'insert into', 'add to', or 'modify' a selected clip — use insert_vidu_v2v_clip_into_selected_clip_tool for that instead. Argument: prompt (required, describe the video). Optional: duration_seconds (default from settings, e.g. 4); position_seconds (empty for playhead); track (empty for selected or first track)."""
+    """Generate a brand-new standalone video from a text prompt using AI (Runware/Kling) and add it to the timeline. ONLY use this tool when the user wants to create an entirely new video from scratch (no existing clip involved). Do NOT use this tool when the user says 'insert into', 'add to', or 'modify' a selected clip — use insert_kling_v2v_clip_into_selected_clip_tool for that instead. Argument: prompt (required, describe the video). Optional: duration_seconds (default from settings, e.g. 4); position_seconds (empty for playhead); track (empty for selected or first track)."""
     return _NO_FRONTEND
 
 
 @tool
-def insert_vidu_v2v_clip_into_selected_clip_tool(query: str, fade_ms: str = "400") -> str:
-    """Insert an AI-generated 4s clip into the currently selected timeline clip using Vidu V2V. This is the ONLY tool to use when the user says 'insert', 'add into', 'modify', or 'change' the selected clip. It finds the best insertion point, generates a video-to-video clip, bakes it into the original with crossfades, and imports the combined clip into the project files panel. The original clip on the timeline is left unchanged. Do NOT also call generate_video_and_add_to_timeline_tool — this tool handles everything and only produces ONE imported file.
+def insert_kling_v2v_clip_into_selected_clip_tool(query: str, fade_ms: str = "400") -> str:
+    """Insert an AI-generated 4s clip into the currently selected timeline clip using Kling V2V. This is the ONLY tool to use when the user says 'insert', 'add into', 'modify', or 'change' the selected clip. It finds the best insertion point, generates a video-to-video clip, bakes it into the original with crossfades, and imports the combined clip into the project files panel. The original clip on the timeline is left unchanged. Do NOT also call generate_video_and_add_to_timeline_tool — this tool handles everything and only produces ONE imported file.
 
     Args:
         query: what to add/change (single simple action)
@@ -44,6 +44,6 @@ def get_video_gen_tools():
     """Return all video generation LangChain tools."""
     return [
         generate_video_and_add_to_timeline_tool,
-        insert_vidu_v2v_clip_into_selected_clip_tool,
+        insert_kling_v2v_clip_into_selected_clip_tool,
         generate_transition_clip_tool,
     ]
