@@ -55,22 +55,20 @@ def tag_statistics():
 
 @router.post("/analyze")
 async def analyze_video_tags(req: dict):
-    """AI-powered video tagging/analysis (replaces GeminiVideoTagger on frontend)."""
+    """AI-powered video tagging/analysis using Google Gemini."""
     from datetime import datetime
     video_path = req.get("video_path", "")
     if not video_path:
         return _empty_ai_metadata()
 
-    # Try OpenAI vision analysis
     try:
         from config import get_settings
-        from core.providers.openai_provider import OpenAIProvider
+        from core.providers.gemini_provider import GeminiProvider
         settings = get_settings()
-        api_key = settings.openai_api_key
+        api_key = settings.google_api_key
         if api_key:
-            provider = OpenAIProvider(api_key=api_key)
+            provider = GeminiProvider(api_key=api_key)
             if provider.is_available():
-                import asyncio
                 result = await provider.analyze_image(video_path)
                 tags = result.to_dict()
                 # Store tags in tag manager
@@ -82,8 +80,8 @@ async def analyze_video_tags(req: dict):
                     "analyzed": True,
                     "analysis_version": "2.0",
                     "analysis_date": datetime.now().isoformat(),
-                    "provider": "openai",
-                    "scene_descriptions": [],
+                    "provider": result.provider or "gemma-3-27b",
+                    "scene_descriptions": result.raw_response.get("scene_descriptions", []),
                     "tags": {
                         "objects": tags.get("objects", []),
                         "scenes": tags.get("scenes", []),

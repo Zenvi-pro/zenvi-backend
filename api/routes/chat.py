@@ -169,44 +169,59 @@ async def chat_websocket(websocket: WebSocket):
                 thread = threading.Thread(target=run_in_thread, daemon=True)
                 thread.start()
 
-                # Process incoming messages (tool results) while agent runs
-                while not agent_done.is_set():
-                    try:
-                        # Wait for either a message or the agent to finish
-                        done, _ = await asyncio.wait(
-                            [
-                                asyncio.ensure_future(asyncio.to_thread(lambda: agent_done.wait(0.1))),
-                                asyncio.ensure_future(
-                                    asyncio.wait_for(websocket.receive_text(), timeout=0.5)
-                                ),
-                            ],
+                # Process incoming messages (tool results) while the agent runs.
+                # Keep exactly ONE pending receive_text() task at all times so we
+                # never hit "cannot call recv while another coroutine is already waiting".
+                receive_task: asyncio.Task = asyncio.ensure_future(websocket.receive_text())
+                try:
+                    while not agent_done.is_set():
+                        # Wrap agent_done.wait() in a fresh task each iteration so we
+                        # can cancel it without touching the Event itself.
+                        agent_wait = asyncio.ensure_future(agent_done.wait())
+                        done_set, _ = await asyncio.wait(
+                            [receive_task, agent_wait],
                             return_when=asyncio.FIRST_COMPLETED,
                         )
-                        for task in done:
+
+                        # Always cancel the agent_wait task to avoid leaking it.
+                        if agent_wait not in done_set:
+                            agent_wait.cancel()
                             try:
-                                result = task.result()
-                                if isinstance(result, str):
-                                    # Got a message from the client
-                                    inner_msg = json.loads(result)
-                                    if inner_msg.get("type") == "tool_result":
-                                        inner_data = inner_msg.get("data", {})
-                                        call_id = inner_data.get("call_id", "")
-                                        if call_id in pending_tool_calls:
-                                            from core.chat.agent_runner import ToolExecutionResult
-                                            ter = ToolExecutionResult(
-                                                call_id,
-                                                inner_data.get("result", ""),
-                                                inner_data.get("error"),
-                                            )
-                                            pending_tool_calls[call_id].set_result(ter)
-                            except (asyncio.TimeoutError, asyncio.CancelledError):
+                                await agent_wait
+                            except asyncio.CancelledError:
                                 pass
+
+                        if receive_task in done_set:
+                            try:
+                                inner_raw = receive_task.result()
+                                inner_msg = json.loads(inner_raw)
+                                if inner_msg.get("type") == "tool_result":
+                                    inner_data = inner_msg.get("data", {})
+                                    call_id = inner_data.get("call_id", "")
+                                    if call_id in pending_tool_calls and not pending_tool_calls[call_id].done():
+                                        from core.chat.agent_runner import ToolExecutionResult
+                                        ter = ToolExecutionResult(
+                                            call_id,
+                                            inner_data.get("result", ""),
+                                            inner_data.get("error"),
+                                        )
+                                        pending_tool_calls[call_id].set_result(ter)
+                            except WebSocketDisconnect:
+                                raise
                             except Exception:
                                 pass
-                    except (asyncio.TimeoutError, asyncio.CancelledError):
-                        pass
-                    except Exception:
-                        break
+                            # Only start a new receive task if the agent is still running.
+                            if not agent_done.is_set():
+                                receive_task = asyncio.ensure_future(websocket.receive_text())
+                finally:
+                    # Guarantee the receive task is cleaned up before we return to
+                    # the outer receive_text() call, preventing a concurrent-recv error.
+                    if not receive_task.done():
+                        receive_task.cancel()
+                        try:
+                            await receive_task
+                        except (asyncio.CancelledError, Exception):
+                            pass
 
                 thread.join(timeout=5)
 

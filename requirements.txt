@@ -17,9 +17,13 @@ langchain-ollama>=0.2.0
 
 # AI Providers (media analysis)
 openai>=1.50.0
+google-genai>=1.0.0
 google-generativeai>=0.8.0
 google-cloud-vision>=3.7.0
 boto3>=1.35.0  # AWS Rekognition
+
+# Video processing
+opencv-python>=4.9.0
 
 # Video indexing
 twelvelabs>=0.3.0

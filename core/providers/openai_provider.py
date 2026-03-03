@@ -50,7 +50,7 @@ class OpenAIProvider(BaseAIProvider):
     """OpenAI GPT-4 Vision provider for media analysis."""
 
     def __init__(self, api_key: Optional[str] = None, **kwargs):
-        self.model = kwargs.get("model", "gpt-4-vision-preview")
+        self.model = kwargs.get("model", "gpt-4o")
         self.max_tokens = kwargs.get("max_tokens", 1000)
         self.temperature = kwargs.get("temperature", 0.7)
         super().__init__(api_key, **kwargs)

@@ -4,7 +4,7 @@ Media analysis endpoints.
 
 from typing import Dict, List, Any
 from fastapi import APIRouter, BackgroundTasks
-from api.schemas import StatusResponse
+from api.schemas import StatusResponse, AnalysisQueueRequest
 from logger import log
 
 router = APIRouter(prefix="/media", tags=["media"])
@@ -65,14 +65,14 @@ async def start_analysis(background_tasks: BackgroundTasks):
                 item["status"] = "processing"
                 _analysis_state["current_file"] = item.get("file_path", "")
                 try:
-                    # Run AI analysis via OpenAI provider
+                    # Run AI analysis via Gemini
                     from config import get_settings
-                    from core.providers.openai_provider import OpenAIProvider
+                    from core.providers.gemini_provider import GeminiProvider
                     import asyncio
                     settings = get_settings()
-                    api_key = settings.openai_api_key
+                    api_key = settings.google_api_key
                     if api_key:
-                        provider = OpenAIProvider(api_key=api_key)
+                        provider = GeminiProvider(api_key=api_key)
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
                         result = loop.run_until_complete(provider.analyze_image(item["file_path"]))
@@ -103,11 +103,11 @@ def clear_analysis_queue():
 
 
 @router.post("/analysis/queue")
-def queue_file_for_analysis(req: dict):
+def queue_file_for_analysis(req: AnalysisQueueRequest):
     """Add a file to the analysis queue."""
-    file_id = req.get("file_id", "")
-    file_path = req.get("file_path", "")
-    media_type = req.get("media_type", "video")
+    file_id = req.file_id
+    file_path = req.file_path
+    media_type = req.media_type
 
     if not file_id or not file_path:
         return StatusResponse(success=False, message="file_id and file_path are required")
