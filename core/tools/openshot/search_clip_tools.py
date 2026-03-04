@@ -26,8 +26,16 @@ def search_selected_clip_scenes_tool(query: str, top_k: str = "5", use_openai_re
 
 
 @tool
-def slice_selected_clip_at_best_match_tool(query: str) -> str:
-    """Slice the selected timeline clip at the best match inside its time window (TwelveLabs preferred, else scene_descriptions)."""
+def slice_selected_clip_at_best_match_tool(query: str, occurrence: str = "0") -> str:
+    """Slice the selected timeline clip at the best match inside its time window (TwelveLabs preferred, else scene_descriptions).
+
+    Args:
+        query: natural language description of the moment to find (strip any ordinal words like 'first', 'second' from here)
+        occurrence: which occurrence to use when multiple matches exist.
+            '0' = highest-scoring match (default).
+            '1' = first chronological match, '2' = second, etc.
+            Always pass this when the user says 'first time', 'second time', etc.
+    """
     return _NO_FRONTEND
 
 

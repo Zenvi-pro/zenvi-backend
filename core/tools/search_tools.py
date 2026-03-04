@@ -11,10 +11,39 @@ def search_clips(query: str, top_k: int = 5) -> str:
     try:
         from core.indexing.twelvelabs import search_index
         results = search_index(query, top_k=top_k)
-        if results:
-            return f"Found {len(results)} matches: " + "; ".join(
-                f"{r.get('filename', 'unknown')} (score: {r.get('score', 0):.2f})" for r in results
+        if not results:
+            return (
+                f"No results found for '{query}'. "
+                "Try a more specific description (e.g. add context like colour, action, or object)."
             )
+
+        # Group by filename so we can detect repeated occurrences in the same video
+        from collections import defaultdict
+        grouped: dict = defaultdict(list)
+        for r in results:
+            key = r.get("filename") or r.get("video_id") or "unknown"
+            grouped[key].append(r)
+
+        lines = [f"Found {len(results)} match(es) across {len(grouped)} video(s):"]
+        for filename, hits in grouped.items():
+            if len(hits) == 1:
+                r = hits[0]
+                lines.append(
+                    f"  • {filename} — {r['start']:.1f}s–{r['end']:.1f}s (score: {r['score']:.2f})"
+                )
+            else:
+                # Multiple occurrences of the same event in one video
+                lines.append(f"  • {filename} — {len(hits)} occurrences:")
+                for i, r in enumerate(hits, 1):
+                    lines.append(
+                        f"      {i}. {r['start']:.1f}s–{r['end']:.1f}s (score: {r['score']:.2f})"
+                    )
+                lines.append(
+                    f"      Multiple matches in '{filename}' — ask the user which occurrence they mean "
+                    f"(e.g. 'the 1st time', 'the 2nd time', etc.)."
+                )
+
+        return "\n".join(lines)
     except Exception as e:
         log.debug("TwelveLabs search not available: %s", e)
     return f"No results found for '{query}'. TwelveLabs indexing may not be configured."

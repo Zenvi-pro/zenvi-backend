@@ -252,15 +252,15 @@ def search_index(query: str, *, index_id: str = "", top_k: int = 5):
                     break
         if not index_id:
             return []
-        results = client.search.query(index_id=index_id, query_text=query, options=["visual", "audio"])
+        results = client.search.query(index_id=index_id, query_text=query, search_options=["visual", "audio"])
         clips = []
-        for r in results.data[:top_k]:
+        for r in list(results)[:top_k]:
             clips.append({
                 "video_id": getattr(r, "video_id", None),
-                "score": getattr(r, "score", 0),
-                "start": getattr(r, "start", 0),
-                "end": getattr(r, "end", 0),
-                "filename": getattr(r, "filename", ""),
+                "score": float(getattr(r, "score", None) or 0),
+                "start": float(getattr(r, "start", None) or 0),
+                "end": float(getattr(r, "end", None) or 0),
+                "filename": getattr(r, "filename", None) or "",
             })
         return clips
     except Exception as e:
