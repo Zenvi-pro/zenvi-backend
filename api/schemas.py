@@ -149,12 +149,17 @@ class GenerateVideoRequest(BaseModel):
     height: int = 720
     input_video_url: Optional[str] = None
     input_image_path: Optional[str] = None  # Local path to a frame image for i2v
+    seed_video_path: Optional[str] = None  # Local path to a seed video for v2v
+    strength: Optional[float] = None  # v2v strength (0.0-1.0)
+    frame_images_paths: Optional[List[Dict[str, str]]] = None  # [{"path": ..., "frame": "first"|"last"}]
 
 
 class GenerateMorphVideoRequest(BaseModel):
     prompt: str
-    start_image_url: str
-    end_image_url: str
+    start_image_url: str = ""  # Public URL or data URI of start frame
+    end_image_url: str = ""    # Public URL or data URI of end frame
+    start_image_path: Optional[str] = None  # Local path to start frame (converted to data URI)
+    end_image_path: Optional[str] = None    # Local path to end frame (converted to data URI)
     duration_seconds: int = 5
     model: str = "klingai:kling@o1"
     width: int = 1280

@@ -131,9 +131,9 @@ async def chat_websocket(websocket: WebSocket):
                         # Wait for the frontend to send the result back
                         try:
                             result = asyncio.run_coroutine_threadsafe(
-                                asyncio.wait_for(future, timeout=600),
+                                asyncio.wait_for(future, timeout=900),
                                 loop,
-                            ).result(timeout=605)
+                            ).result(timeout=905)
                             return result
                         except Exception as e:
                             return ToolExecutionResult(req.call_id, f"Error: Tool execution timed out: {e}")

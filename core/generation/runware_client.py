@@ -4,7 +4,6 @@ Ported from zenvi-core — no Qt, thread-safe.
 """
 
 import base64
-import json
 import os
 import time
 import uuid
@@ -54,18 +53,6 @@ def _snap_to_kling_duration(duration, model=""):
     # Pick the nearest allowed value
     best = min(_KLING_O1_ALLOWED_DURATIONS, key=lambda d: abs(d - duration))
     return int(best)
-
-
-def _try_parse_runware_error(body_text: str) -> dict:
-    try:
-        return json.loads(body_text) if body_text else {}
-    except Exception:
-        return {}
-
-
-def _as_data_uri(media_type: str, raw_bytes: bytes) -> str:
-    b64 = base64.b64encode(raw_bytes).decode("ascii")
-    return f"data:{media_type};base64,{b64}"
 
 
 def _poll_runware_task_rest(api_key: str, task_uuid: str, *, timeout_seconds: float = POLL_TIMEOUT_SECONDS):
@@ -125,6 +112,9 @@ def runware_generate_video(
     height=1080,
     input_video_url=None,
     input_image_path=None,
+    seed_video=None,
+    strength=None,
+    frame_images=None,
 ):
     """
     Generate video via Runware. Prefers the official SDK (WebSocket); falls back to REST.
@@ -140,6 +130,10 @@ def runware_generate_video(
                          If provided, the model should support it (e.g. Kling O1 video-edit).
         input_image_path: Optional local path to a frame image for image-to-video (i2v).
                           Used as the first frame reference for Kling.
+        seed_video: Optional base64 data-URI of a seed video for video-to-video.
+        strength: Optional float (0.0-1.0) controlling how much the seed is preserved.
+        frame_images: Optional list of dicts [{"inputImage": ..., "frame": "first"|"last"}]
+                      for frame-constrained generation.
     Returns:
         (video_url, None) on success, or (None, error_message) on failure.
     """
@@ -174,12 +168,14 @@ def runware_generate_video(
                 model=model,
                 deliveryMethod="async",
             )
-            # Kling O1 video-edit: duration is inferred from input video
-            if not input_video_url:
+            # Kling O1 video-edit: duration & dimensions are inferred from
+            # the input video — do NOT send them or the API rejects them.
+            _is_v2v = bool(seed_video or input_video_url)
+            if not _is_v2v:
                 req_kwargs["duration"] = duration_int
-            if width is not None:
+            if not _is_v2v and width is not None:
                 req_kwargs["width"] = int(width)
-            if height is not None:
+            if not _is_v2v and height is not None:
                 req_kwargs["height"] = int(height)
             req = IVideoInference(**req_kwargs)
             # Force duration to int – the SDK declares it as Optional[float]
@@ -193,7 +189,11 @@ def runware_generate_video(
             # but _addVideoImages() serialises via asdict() which only includes
             # declared dataclass fields (inputImage, frame).  So we convert to a
             # base64 data-URI *ourselves* before passing it to IFrameImage.
-            if input_image_path and os.path.isfile(input_image_path):
+            if frame_images:
+                # Pre-built frame constraint list [{"inputImage": ..., "frame": "first"|"last"}]
+                log.info("Using %d frame_images for constrained generation", len(frame_images))
+                req.frameImages = [IFrameImage(inputImage=fi["inputImage"], frame=fi.get("frame", "first")) for fi in frame_images]
+            elif input_image_path and os.path.isfile(input_image_path):
                 log.info("Using frame image for i2v: %s", input_image_path)
                 import mimetypes as _mt
                 _mime, _ = _mt.guess_type(input_image_path)
@@ -206,9 +206,23 @@ def runware_generate_video(
                 log.info("i2v: converted %d bytes → data-URI (%d chars), mode=image-to-video",
                          len(_raw), len(_data_uri))
                 req.frameImages = [IFrameImage(inputImage=_data_uri)]
-            # Video-to-video: use input video URL
+            # Video-to-video: pass the seed video via IVideoInputs.video
+            # which is the proper SDK-supported field.  This triggers
+            # Kling O1's "video-edit" workflow.
+            # NOTE: Kling O1 does NOT support seedVideo, strength,
+            # seedImage, or CFGScale.  The model's allowed params are:
+            # includeCost, taskUUID, taskType, model, outputType,
+            # outputFormat, numberResults, positivePrompt, deliveryMethod,
+            # duration, frameImages, providerSettings, fps,
+            # uploadEndpoint, outputQuality, webhookURL, ttl, inputs,
+            # resolution.
+            if seed_video:
+                req.inputs = IVideoInputs(video=seed_video)
+                log.info("v2v SDK: seed video set via inputs.video (%d chars)",
+                         len(seed_video))
             elif input_video_url:
                 req.inputs = IVideoInputs(video=input_video_url)
+                log.info("v2v SDK: input video URL set via inputs.video")
             
             result = loop.run_until_complete(rw.videoInference(requestVideo=req))
             task_uuid = getattr(result, "taskUUID", None) or getattr(result, "task_uuid", None)
@@ -246,19 +260,33 @@ def runware_generate_video(
         "taskType": "videoInference", "taskUUID": task_uuid, "positivePrompt": prompt,
         "model": model, "outputFormat": "MP4", "deliveryMethod": "async",
     }
-    if not input_video_url and not input_image_path:
+    _is_v2v_rest = bool(seed_video or input_video_url)
+    if not _is_v2v_rest and not input_image_path:
         task["duration"] = int(duration_int)
-    if width is not None:
+    # Kling O1 video-edit: dimensions are inferred from input video.
+    # The model rejects width/height — only 'resolution' is allowed.
+    if not _is_v2v_rest and width is not None:
         task["width"] = int(width)
-    if height is not None:
+    if not _is_v2v_rest and height is not None:
         task["height"] = int(height)
-    if input_image_path and os.path.isfile(input_image_path):
+    # Frame constraints (pre-built list)
+    if frame_images:
+        task["frameImages"] = frame_images
+    elif input_image_path and os.path.isfile(input_image_path):
         # i2v: pass the frame image as base64 frameImage
         with open(input_image_path, "rb") as img_f:
             img_b64 = base64.b64encode(img_f.read()).decode("ascii")
         task["frameImages"] = [{"inputImage": f"data:image/png;base64,{img_b64}"}]
-    elif input_video_url:
-        task["inputs"] = {"video": input_video_url}
+    # Seed video for v2v — use inputs.video (the only field Kling O1
+    # supports for video-edit).  Do NOT include seedVideo or strength
+    # as top-level params — Kling O1 rejects them.
+    v2v_active = False
+    if seed_video:
+        task.setdefault("inputs", {})["video"] = seed_video
+        v2v_active = True
+    if input_video_url and not seed_video:
+        task.setdefault("inputs", {})["video"] = input_video_url
+        v2v_active = True
     payload = [{"taskType": "authentication", "apiKey": api_key}, task]
     try:
         r = requests.post(RUNWARE_API_BASE, headers=headers, json=payload, timeout=120)
@@ -267,6 +295,24 @@ def runware_generate_video(
     except Exception as e:
         return None, f"Runware API request failed: {e}"
     errors = data.get("errors") or []
+    # Error recovery: if the API rejects any unsupported parameter,
+    # strip it and retry once.
+    if errors and v2v_active:
+        err0 = errors[0] if isinstance(errors[0], dict) else {}
+        if err0.get("code") == "unsupportedParameter":
+            bad_param = err0.get("parameter", "")
+            log.warning("REST v2v: API rejected '%s', stripping and retrying", bad_param)
+            task.pop(bad_param, None)
+            task_uuid = str(uuid.uuid4())
+            task["taskUUID"] = task_uuid
+            payload2 = [{"taskType": "authentication", "apiKey": api_key}, task]
+            try:
+                r2 = requests.post(RUNWARE_API_BASE, headers=headers, json=payload2, timeout=120)
+                r2.raise_for_status()
+                data = r2.json()
+                errors = data.get("errors") or []
+            except Exception as e2:
+                return None, f"Runware API retry failed: {e2}"
     if errors:
         return None, f"Runware error: {errors[0].get('message', str(errors[0]))}."
     return _poll_runware_task_rest(api_key, task_uuid)

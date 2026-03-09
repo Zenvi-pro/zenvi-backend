@@ -65,7 +65,7 @@ def run_agent_with_tools(
     tool_executor: Optional[ToolExecutorCallback] = None,
     system_prompt: str = SYSTEM_PROMPT,
     max_iterations: int = 15,
-    timeout_seconds: int = 120,
+    timeout_seconds: int = 600,
 ) -> str:
     """
     Run a LangChain agent with the given tools and system prompt.
@@ -110,9 +110,27 @@ def run_agent_with_tools(
     try:
         llm_with_tools = llm.bind_tools(tools)
 
+        # Terminal tools: return their result (success OR error) directly
+        # so the user sees the real message, not a generic agent error.
+        _TERMINAL_TOOLS = {
+            "insert_kling_v2v_clip_into_selected_clip_tool",
+            "generate_video_and_add_to_timeline_tool",
+            "generate_transition_clip_tool",
+            "generate_manim_video_tool",
+            "invoke_video_agent",
+        }
+
         for iteration in range(max_iterations):
+            # Check timeout BEFORE the LLM call (the expensive part),
+            # but NOT right after tool execution — a completed tool result
+            # must be returned to the user, not discarded by a timeout.
             elapsed = time.time() - start_time
             if elapsed > timeout_seconds:
+                # Before giving up, check if a tool already produced a
+                # result we should surface.
+                for m in reversed(lc_messages):
+                    if isinstance(m, ToolMessage):
+                        return m.content
                 return f"Error: Agent timed out after {int(elapsed)} seconds."
 
             response = llm_with_tools.invoke(lc_messages)
@@ -156,15 +174,11 @@ def run_agent_with_tools(
 
                 lc_messages.append(ToolMessage(content=str(result), tool_call_id=tid))
 
-                # Terminal tools — return immediately
-                _TERMINAL_TOOLS = {
-                    "insert_kling_v2v_clip_into_selected_clip_tool",
-                    "generate_video_and_add_to_timeline_tool",
-                    "generate_transition_clip_tool",
-                    "generate_manim_video_tool",
-                    "invoke_video_agent",
-                }
-                if name in _TERMINAL_TOOLS and not str(result).startswith("Error:"):
+                # Terminal tools — return result immediately (both
+                # success AND error).  This ensures the user sees the
+                # actual error (e.g. "insufficient credits") rather
+                # than a generic agent timeout.
+                if name in _TERMINAL_TOOLS:
                     return str(result)
 
         # Final response
@@ -190,7 +204,7 @@ def _is_frontend_tool(name: str) -> bool:
     return name in _FRONTEND_TOOL_NAMES
 
 
-def run_agent(model_id, messages, tool_executor=None, timeout_seconds=120):
+def run_agent(model_id, messages, tool_executor=None, timeout_seconds=600):
     """
     Run the LangChain agent with multi-agent root or single-agent fallback.
     """
