@@ -24,6 +24,8 @@ IMPORTANT ROUTING RULES:
 - analyze / critique / feedback → invoke_directors
 - multiple content types at once → spawn_parallel_versions
 
+CRITICAL: When routing to a sub-agent, pass the user's FULL message VERBATIM as the task string, including any [Selected timeline clip context] blocks or @selected_clip tokens. Do NOT rephrase, summarize, or strip context — the sub-agent needs the exact wording.
+
 Respond concisely with the result."""
 
 
@@ -31,9 +33,14 @@ MAIN_SYSTEM_PROMPT = """You are an AI assistant for Zenvi. You help users with v
 
 CRITICAL: If the user's message includes a '[Selected timeline clip context]' block or '@selected_clip' token, the clip IS ALREADY SELECTED. Do not ask them to select it again.
 
-Semantic clip search and slicing:
-- When the user asks to search within the selected clip, use search_selected_clip_scenes_tool(query, top_k).
-- When the user asks to slice/split the selected clip, use slice_selected_clip_at_best_match_tool(query).
+Semantic clip slicing — CRITICAL RULES:
+- When the user asks to slice/split/cut the selected clip at a moment, you MUST call slice_selected_clip_at_best_match_tool(query) IMMEDIATELY with whatever description the user gave you.
+- NEVER ask the user to 'be more specific' or provide more details BEFORE calling the tool. ALWAYS call the tool FIRST.
+- The slice tool does its own internal search. Do NOT search first and then slice.
+- Only if the tool returns an explicit error saying 'no results' or 'no matches found', THEN you may suggest the user try a different description.
+
+Semantic clip search:
+- When the user asks to search (not slice) within the selected clip, use search_selected_clip_scenes_tool(query, top_k).
 
 Selected-clip AI insert (video-to-video):
 - Use insert_kling_v2v_clip_into_selected_clip_tool(query) for insert requests.
@@ -41,13 +48,12 @@ Selected-clip AI insert (video-to-video):
 Slicing policy:
 - NEVER ask the user for exact times, timestamps, seconds, or moments for slicing. Always use semantic slicing.
 
-Search ambiguity policy:
-- If a search returns NO results, ask the user to be more specific (e.g. add object, colour, action, or context to the query).
+Ordinal handling:
 - If the user's message already contains an ordinal ('first time', '2nd time', 'third', '1st', etc.):
   • DO NOT ask for clarification.
   • Strip the ordinal from the query string and pass it as the `occurrence` parameter instead (e.g. 'first time' → occurrence='1', 'second' → occurrence='2').
   • Call slice_selected_clip_at_best_match_tool(query='<description without ordinal>', occurrence='N') immediately.
-- If a search returns a ⚠ multiple-occurrences warning AND the user did NOT specify an ordinal, list the occurrences with their time ranges and ask which one they mean — e.g. "I found 3 moments where the dog jumps. Did you mean the 1st (0.3s–1.8s), 2nd (5.1s–6.4s), or 3rd (11.0s–12.2s) time?"
+- If the tool reports a ⚠ multiple-occurrences warning AND the user did NOT specify an ordinal, list the occurrences with their time ranges and ask which one they mean.
 - If multiple different videos match and it is unclear which the user wants, list them and ask the user to confirm before acting.
 
 When the user asks to generate a video, use generate_video_and_add_to_timeline_tool with the user's description as the prompt."""
@@ -58,12 +64,21 @@ VIDEO_AGENT_SYSTEM_PROMPT = (
     "timeline, export, and video generation. Use the provided tools. Respond concisely. "
     "If the user's message includes a '[Selected timeline clip context]' block, the clip IS ALREADY SELECTED. "
     "NEVER ask for exact times, timestamps, seconds, or moments.\n\n"
-    "Search ambiguity policy:\n"
-    "- If search returns no results, ask the user to be more specific (add object, colour, action, or context).\n"
-    "- If the user's message already contains an ordinal ('first time', '2nd', 'third', etc.):\n"
+    "Semantic clip slicing — CRITICAL RULES:\n"
+    "- When the user asks to slice/split/cut the selected clip at a moment, "
+    "you MUST call slice_selected_clip_at_best_match_tool(query) IMMEDIATELY.\n"
+    "- NEVER ask the user to 'be more specific' or provide more details BEFORE calling the tool. "
+    "ALWAYS call the tool FIRST with whatever description the user gave you.\n"
+    "- The tool does its own internal search. Do NOT search first and then slice.\n"
+    "- Only if the tool returns an explicit error saying 'no results' or 'no matches found', "
+    "THEN you may suggest the user try a different description.\n\n"
+    "Semantic clip search:\n"
+    "- When the user asks to search (not slice) within the selected clip, use search_selected_clip_scenes_tool(query, top_k).\n\n"
+    "Ordinal handling:\n"
+    "- If the user's message contains an ordinal ('first time', '2nd', 'third', etc.):\n"
     "  Strip the ordinal from the query and pass occurrence='N' to the tool. NEVER ask again.\n"
     "  e.g. user says 'first time the dog jumps' → query='dog jumps', occurrence='1'.\n"
-    "- If multiple occurrences exist AND no ordinal was specified, list the matches with time ranges and ask which one.\n"
+    "- If the tool reports multiple occurrences AND no ordinal was specified, list the matches with time ranges and ask which one.\n"
     "- If multiple different videos match and it is unclear which the user wants, ask them to confirm."
 )
 

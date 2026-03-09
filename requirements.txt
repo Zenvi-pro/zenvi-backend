@@ -29,7 +29,7 @@ opencv-python>=4.9.0
 twelvelabs>=0.3.0
 
 # Video generation
-runware>=0.4.0
+runware>=0.5.0
 httpx>=0.27.0
 requests>=2.31.0
 

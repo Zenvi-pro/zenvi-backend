@@ -238,11 +238,18 @@ def index_video_blocking(*, file_path: str, index_name: str, filename: Optional[
         return IndexingResult(status="failed", filename=filename, error=_safe_str(e)).to_dict()
 
 
-def search_index(query: str, *, index_id: str = "", top_k: int = 5):
-    """Search a TwelveLabs index for matching clips."""
+def search_index(query: str, *, index_id: str = "", top_k: int = 5, video_id: str = ""):
+    """Search a TwelveLabs index for matching clips.
+
+    Returns a list of clip dicts on success, or a dict with an "error" key
+    when the search fails (so callers can distinguish "no matches" from
+    "something went wrong").
+    """
+    import json as _json
+
     client = _get_client()
     if client is None:
-        return []
+        return {"error": "TwelveLabs is not configured (missing API key)."}
     try:
         if not index_id:
             # Use first available index
@@ -251,18 +258,39 @@ def search_index(query: str, *, index_id: str = "", top_k: int = 5):
                 if index_id:
                     break
         if not index_id:
-            return []
-        results = client.search.query(index_id=index_id, query_text=query, search_options=["visual", "audio"])
+            return {"error": "No TwelveLabs index found."}
+
+        # Build search kwargs; pass filter for specific video when provided
+        search_kwargs = dict(
+            index_id=index_id,
+            query_text=query,
+            search_options=["visual", "audio"],
+        )
+        # The SDK filter parameter expects a **JSON string**, not a dict.
+        # Syntax: {"id": ["<video_id>"]} restricts results to that video.
+        if video_id:
+            search_kwargs["filter"] = _json.dumps({"id": [video_id]})
+
+        results = client.search.query(**search_kwargs)
         clips = []
         for r in list(results)[:top_k]:
+            vid = getattr(r, "video_id", None)
             clips.append({
-                "video_id": getattr(r, "video_id", None),
+                "video_id": vid,
                 "score": float(getattr(r, "score", None) or 0),
                 "start": float(getattr(r, "start", None) or 0),
                 "end": float(getattr(r, "end", None) or 0),
                 "filename": getattr(r, "filename", None) or "",
             })
+        # Client-side filter as safety net (in case SDK didn't honour the filter)
+        if video_id:
+            clips = [c for c in clips if str(c.get("video_id") or "") == video_id]
         return clips
     except Exception as e:
-        log.error("TwelveLabs search failed: %s", e)
-        return []
+        err_str = _safe_str(e)
+        log.error("TwelveLabs search failed: %s", err_str)
+        # Surface indexing-related errors so the frontend can inform the user
+        err_lower = err_str.lower()
+        if "indexing" in err_lower or "not ready" in err_lower or "pending" in err_lower:
+            return {"error": "This video is still being indexed by TwelveLabs. Please wait for indexing to complete and try again."}
+        return {"error": f"TwelveLabs search failed: {err_str}"}

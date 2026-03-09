@@ -30,6 +30,7 @@ def generate_video(req: GenerateVideoRequest):
         width=req.width,
         height=req.height,
         input_video_url=req.input_video_url,
+        input_image_path=req.input_image_path,
     )
 
     if err:

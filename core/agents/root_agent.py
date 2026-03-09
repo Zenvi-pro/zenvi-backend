@@ -21,7 +21,8 @@ def run_root_agent(model_id, messages, tool_executor=None, timeout_seconds=120):
 
         @tool
         def invoke_video_agent(task: str) -> str:
-            """Route to the video/timeline agent. Use for: list files, add clips, export, timeline editing, generate video, split clips, and AI object replacement."""
+            """Route to the video/timeline agent. Use for: list files, add clips, export, timeline editing, generate video, split clips, and AI object replacement.
+            IMPORTANT: Pass the user's message VERBATIM as the task, including any [Selected timeline clip context] blocks. Do NOT rephrase or summarize — the video agent needs the exact wording and context."""
             return sub_agents.run_video_agent(mid, task, te)
 
         @tool

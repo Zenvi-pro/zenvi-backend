@@ -20,6 +20,12 @@ def main():
         port=settings.port,
         reload=settings.debug,
         log_level="debug" if settings.debug else "info",
+        # Disable server-side WS ping/pong.  During long tool executions the
+        # frontend cannot call recv() to answer pings, so Uvicorn would close
+        # the connection after ws_ping_timeout.  TCP keepalive and our own
+        # client-side pings are sufficient.
+        ws_ping_interval=None,
+        ws_ping_timeout=None,
     )
 
 

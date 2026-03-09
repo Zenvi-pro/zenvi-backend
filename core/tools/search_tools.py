@@ -11,6 +11,9 @@ def search_clips(query: str, top_k: int = 5) -> str:
     try:
         from core.indexing.twelvelabs import search_index
         results = search_index(query, top_k=top_k)
+        # search_index returns a dict with "error" key on failure
+        if isinstance(results, dict) and "error" in results:
+            return f"Error: {results['error']}"
         if not results:
             return (
                 f"No results found for '{query}'. "

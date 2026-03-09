@@ -105,6 +105,8 @@ class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
     index_id: Optional[str] = None
+    video_id: Optional[str] = None
+    page_limit: Optional[int] = None
 
 
 class SearchResultItem(BaseModel):
@@ -118,6 +120,7 @@ class SearchResultItem(BaseModel):
 class SearchResponse(BaseModel):
     results: List[SearchResultItem]
     query: str
+    error: Optional[str] = None
 
 
 # ---- Indexing (TwelveLabs) ----
@@ -145,6 +148,7 @@ class GenerateVideoRequest(BaseModel):
     width: int = 1280
     height: int = 720
     input_video_url: Optional[str] = None
+    input_image_path: Optional[str] = None  # Local path to a frame image for i2v
 
 
 class GenerateMorphVideoRequest(BaseModel):

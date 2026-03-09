@@ -5,6 +5,7 @@ Ported from zenvi-core — no Qt, thread-safe.
 
 import base64
 import json
+import os
 import time
 import uuid
 from logger import log
@@ -13,6 +14,46 @@ RUNWARE_API_BASE = "https://api.runware.ai/v1"
 POLL_INTERVAL_INITIAL = 2.0
 POLL_INTERVAL_MAX = 15.0
 POLL_TIMEOUT_SECONDS = 300
+
+# Kling O1 only supports these specific resolutions
+_KLING_O1_SUPPORTED_DIMS = [(1920, 1080), (1080, 1920), (1440, 1440)]
+
+
+def _snap_to_kling_resolution(w, h, model=""):
+    """Snap arbitrary width/height to the closest supported Kling O1 resolution.
+
+    Only applies when the model string contains 'kling' and the requested
+    dimensions are not already in the supported set.  For non-Kling models
+    the original values are returned unchanged.
+
+    Supported resolutions: 1920x1080, 1080x1920, 1440x1440.
+    """
+    if "kling" not in (model or "").lower():
+        return w, h
+    if w is None or h is None:
+        return 1920, 1080  # default landscape
+    if (int(w), int(h)) in _KLING_O1_SUPPORTED_DIMS:
+        return int(w), int(h)
+    aspect = w / max(h, 1)
+    if aspect > 1.2:
+        return 1920, 1080   # landscape
+    elif aspect < 0.8:
+        return 1080, 1920   # portrait
+    else:
+        return 1440, 1440   # square-ish
+
+
+# Kling O1 only allows these specific durations
+_KLING_O1_ALLOWED_DURATIONS = [5, 10]
+
+
+def _snap_to_kling_duration(duration, model=""):
+    """Snap duration to nearest allowed value for Kling O1 (5 or 10 seconds)."""
+    if "kling" not in (model or "").lower():
+        return int(duration)
+    # Pick the nearest allowed value
+    best = min(_KLING_O1_ALLOWED_DURATIONS, key=lambda d: abs(d - duration))
+    return int(best)
 
 
 def _try_parse_runware_error(body_text: str) -> dict:
@@ -80,9 +121,10 @@ def runware_generate_video(
     prompt,
     duration_seconds=5,
     model="klingai:kling@o1",
-    width=1280,
-    height=720,
+    width=1920,
+    height=1080,
     input_video_url=None,
+    input_image_path=None,
 ):
     """
     Generate video via Runware. Prefers the official SDK (WebSocket); falls back to REST.
@@ -96,6 +138,8 @@ def runware_generate_video(
         height: Output height
         input_video_url: Optional URL of an input video for video-to-video generation.
                          If provided, the model should support it (e.g. Kling O1 video-edit).
+        input_image_path: Optional local path to a frame image for image-to-video (i2v).
+                          Used as the first frame reference for Kling.
     Returns:
         (video_url, None) on success, or (None, error_message) on failure.
     """
@@ -105,11 +149,16 @@ def runware_generate_video(
     if len(prompt) < 2:
         return None, "Prompt must be at least 2 characters."
     api_key = api_key.strip()
-    duration_int = float(max(1, min(10, duration_seconds)))
+    duration_int = _snap_to_kling_duration(max(1, min(10, duration_seconds)), model)
+
+    # Snap to model-supported resolution (Kling O1 only allows specific dims)
+    width, height = _snap_to_kling_resolution(width, height, model)
+    log.info("runware_generate_video: model=%s resolution=%dx%d duration=%r (type=%s)",
+             model, width, height, duration_int, type(duration_int).__name__)
 
     # Try SDK first
     try:
-        from runware import Runware, IVideoInference
+        from runware import Runware, IVideoInference, IFrameImage
         from runware.types import IAsyncTaskResponse, IVideoInputs
         import asyncio
         loop = asyncio.new_event_loop()
@@ -133,9 +182,32 @@ def runware_generate_video(
             if height is not None:
                 req_kwargs["height"] = int(height)
             req = IVideoInference(**req_kwargs)
+            # Force duration to int – the SDK declares it as Optional[float]
+            # but the Kling O1 API rejects floats like 5.0
+            if req.duration is not None:
+                req.duration = int(req.duration)
             
-            # Add input video for video-to-video generation (Kling O1 video-edit workflow)
-            if input_video_url:
+            # Image-to-video (i2v): use a local frame image as starting reference
+            # NOTE: The Runware SDK 0.5.0 has a bug where _processVideoImages()
+            # stores the base64 result in frame_item.inputImages (dynamic attr),
+            # but _addVideoImages() serialises via asdict() which only includes
+            # declared dataclass fields (inputImage, frame).  So we convert to a
+            # base64 data-URI *ourselves* before passing it to IFrameImage.
+            if input_image_path and os.path.isfile(input_image_path):
+                log.info("Using frame image for i2v: %s", input_image_path)
+                import mimetypes as _mt
+                _mime, _ = _mt.guess_type(input_image_path)
+                if not _mime:
+                    _mime = "image/png"
+                with open(input_image_path, "rb") as _fh:
+                    _raw = _fh.read()
+                _b64 = base64.b64encode(_raw).decode("utf-8")
+                _data_uri = f"data:{_mime};base64,{_b64}"
+                log.info("i2v: converted %d bytes → data-URI (%d chars), mode=image-to-video",
+                         len(_raw), len(_data_uri))
+                req.frameImages = [IFrameImage(inputImage=_data_uri)]
+            # Video-to-video: use input video URL
+            elif input_video_url:
                 req.inputs = IVideoInputs(video=input_video_url)
             
             result = loop.run_until_complete(rw.videoInference(requestVideo=req))
@@ -174,13 +246,18 @@ def runware_generate_video(
         "taskType": "videoInference", "taskUUID": task_uuid, "positivePrompt": prompt,
         "model": model, "outputFormat": "MP4", "deliveryMethod": "async",
     }
-    if not input_video_url:
-        task["duration"] = float(duration_int)
+    if not input_video_url and not input_image_path:
+        task["duration"] = int(duration_int)
     if width is not None:
         task["width"] = int(width)
     if height is not None:
         task["height"] = int(height)
-    if input_video_url:
+    if input_image_path and os.path.isfile(input_image_path):
+        # i2v: pass the frame image as base64 frameImage
+        with open(input_image_path, "rb") as img_f:
+            img_b64 = base64.b64encode(img_f.read()).decode("ascii")
+        task["frameImages"] = [{"inputImage": f"data:image/png;base64,{img_b64}"}]
+    elif input_video_url:
         task["inputs"] = {"video": input_video_url}
     payload = [{"taskType": "authentication", "apiKey": api_key}, task]
     try:
@@ -242,8 +319,8 @@ def runware_generate_morph_video(
     end_image_url,
     duration_seconds=5,
     model="klingai:kling@o1",
-    width=1280,
-    height=720,
+    width=1920,
+    height=1080,
 ):
     """
     Generate a morph/transition video using Kling with start and end frame images.
@@ -271,15 +348,17 @@ def runware_generate_morph_video(
         return None, "Prompt must be at least 2 characters."
 
     api_key = api_key.strip()
-    duration_val = int(max(1, min(10, duration_seconds)))
+    duration_val = _snap_to_kling_duration(max(1, min(10, duration_seconds)), model)
 
     try:
         from runware import Runware, IVideoInference
         from runware.types import IAsyncTaskResponse, IVideoInputs, IInputFrame
         import asyncio
 
-        log.info("Morph transition: model=%s duration=%d start=%s end=%s",
-                 model, duration_val, start_image_url[:60], end_image_url[:60])
+        # Snap to supported resolution
+        res_w, res_h = _snap_to_kling_resolution(width, height, model)
+        log.info("Morph transition: model=%s duration=%d resolution=%dx%d start=%s end=%s",
+                 model, duration_val, res_w, res_h, start_image_url[:60], end_image_url[:60])
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -288,26 +367,7 @@ def runware_generate_morph_video(
             rw = Runware(api_key=api_key, timeout=POLL_TIMEOUT_SECONDS)
             loop.run_until_complete(rw.connect())
 
-            # Kling O1 only supports specific resolutions
-            SUPPORTED_DIMS = [(1920, 1080), (1080, 1920), (1440, 1440)]
-
-            def _pick_best_resolution(w, h):
-                """Pick the closest supported resolution based on aspect ratio."""
-                if w is None or h is None:
-                    return 1920, 1080  # default landscape
-                aspect = w / max(h, 1)
-                if aspect > 1.2:
-                    return 1920, 1080   # landscape
-                elif aspect < 0.8:
-                    return 1080, 1920   # portrait
-                else:
-                    return 1440, 1440   # square-ish
-
-            res_w, res_h = _pick_best_resolution(width, height)
-            log.info("Morph: using resolution %dx%d", res_w, res_h)
-
             # Kling O1 requires frame images via inputs.frameImages (not top-level)
-            # Dimensions are inferred from the input images — width/height not supported
             inputs_obj = IVideoInputs(
                 frameImages=[
                     IInputFrame(image=start_image_url, frame="first"),
@@ -318,12 +378,17 @@ def runware_generate_morph_video(
             req_kwargs = dict(
                 positivePrompt=prompt,
                 model=model,
+                width=res_w,
+                height=res_h,
                 duration=duration_val,
                 deliveryMethod="async",
                 inputs=inputs_obj,
             )
 
             req = IVideoInference(**req_kwargs)
+            # Force duration to int – Kling O1 API rejects floats
+            if req.duration is not None:
+                req.duration = int(req.duration)
             result = loop.run_until_complete(rw.videoInference(requestVideo=req))
 
             task_uuid = None

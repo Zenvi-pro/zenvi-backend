@@ -36,6 +36,10 @@ class AIMediaManager:
         try:
             from core.indexing.twelvelabs import search_index
             results = search_index(query)
+            if isinstance(results, dict) and "error" in results:
+                return {"success": False, "message": results["error"]}
+            if not isinstance(results, list):
+                results = []
             return {"success": True, "action": "search", "results": results, "message": f"Found {len(results)} results."}
         except Exception as e:
             return {"success": False, "message": f"Search failed: {e}"}
