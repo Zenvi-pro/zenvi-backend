@@ -44,8 +44,9 @@ def generate_manim_video(description: str, model_id: str = "") -> str:
         with open(script_path, "w") as f:
             f.write(code)
 
+        import sys
         result = subprocess.run(
-            ["manim", "render", "-ql", script_path],
+            [sys.executable, "-m", "manim", "render", "-ql", script_path],
             capture_output=True, text=True, timeout=120, cwd=work_dir,
         )
 
@@ -85,8 +86,9 @@ def _render_manim_scene(script_path: str, scene_name: str, quality: str = "l", o
     import subprocess
     import os
 
+    import sys
     quality_flag = f"-q{quality}" if quality else "-ql"
-    cmd = ["manim", "render", quality_flag, script_path, scene_name]
+    cmd = [sys.executable, "-m", "manim", "render", quality_flag, script_path, scene_name]
     if output_dir:
         cmd.extend(["--media_dir", output_dir])
     try:

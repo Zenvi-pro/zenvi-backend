@@ -109,16 +109,19 @@ def generate_product_launch_video(repo_data_json: str) -> str:
     if not full_data:
         return "Error: full_data missing — call fetch_github_repo_data first."
 
-    import shutil
-    manim_available = shutil.which("manim") is not None
+    import sys
+    import subprocess
+    manim_available = False
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "manim", "--version"],
+            capture_output=True, timeout=10,
+        )
+        manim_available = result.returncode == 0
+    except Exception:
+        pass
     if not manim_available:
-        try:
-            import manim as _test  # noqa: F401
-            manim_available = True
-        except ImportError:
-            pass
-    if not manim_available:
-        return "Error: Manim is not installed. pip install manim"
+        return "Error: Manim is not installed in the backend Python environment. Run: pip install manim"
 
     repo_name = f"{data.get('owner')}/{data.get('repo')}"
     log.info("Product launch video for %s — generating Manim code", repo_name)

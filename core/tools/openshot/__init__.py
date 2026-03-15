@@ -91,4 +91,6 @@ FRONTEND_TOOL_NAMES = {
     "analyze_music_sync_tool",
     "get_project_metadata_tool",
     "analyze_clip_visual_content_tool",
+    # remotion_tools (frontend-delegated: download from Supabase + import to project)
+    "fetch_remotion_video_from_supabase_tool",
 }

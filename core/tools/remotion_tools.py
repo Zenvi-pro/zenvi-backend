@@ -1,16 +1,21 @@
 """
 LangChain tool wrappers for the Remotion rendering service.
 
-Two rendering paths:
-1. render_remotion_from_repo_tool  — full service (port 4500), renders from a GitHub repo URL.
-2. render_remotion_product_launch_tool — simpler service (port 3100), product-launch videos.
-3. check_remotion_health_tool — check which Remotion services are reachable.
+Rendering paths:
+1. render_remotion_from_repo_tool         — full service (port 4500), async job queue.
+2. render_remotion_product_launch_tool    — product-launch service (port 3100), renders
+                                            and uploads the video to Supabase bucket
+                                            "product_demo", returns the public URL.
+3. fetch_remotion_video_from_supabase_tool — FRONTEND-DELEGATED: downloads the Supabase
+                                            URL and imports the file into project files.
+4. check_remotion_health_tool             — health check for both services.
 """
 
 from __future__ import annotations
 
-import json
 from logger import log
+
+_NO_FRONTEND = "Error: This tool requires the frontend to be connected via WebSocket."
 
 
 def _full_client():
@@ -26,7 +31,7 @@ def _product_launch_url() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Standalone functions (called by LangChain tools below)
+# Standalone functions
 # ---------------------------------------------------------------------------
 
 
@@ -38,8 +43,8 @@ def check_remotion_health() -> str:
     pl_ok = check_remotion_service(_product_launch_url())
 
     lines = [
-        f"Full Remotion service (port 4500): {'✅ running' if full_ok else '❌ not reachable'}",
-        f"Product-launch service (port 3100): {'✅ running' if pl_ok else '❌ not reachable'}",
+        f"Full Remotion service: {'✅ running' if full_ok else '❌ not reachable'}",
+        f"Product-launch service: {'✅ running' if pl_ok else '❌ not reachable'}",
     ]
     if not full_ok and not pl_ok:
         lines.append("\nNeither Remotion service is reachable. Please contact support or try again later.")
@@ -98,12 +103,19 @@ def render_remotion_product_launch(
     repo_url: str,
     style: str = "modern",
     duration: int = 30,
-    output_path: str | None = None,
 ) -> str:
-    """Render a product-launch video using the simpler Remotion service (port 3100)."""
-    from core.providers.remotion_client import render_product_launch_video, check_remotion_service, RemotionError
+    """
+    Render a product-launch video via the Remotion product-launch service.
+
+    The service renders the video, uploads it to the Supabase 'product_demo'
+    bucket, and returns the public URL. Returns a result string containing
+    the supabase_url so the agent can pass it to
+    fetch_remotion_video_from_supabase_tool.
+    """
+    from core.providers.remotion_client import check_remotion_service
     from core.providers.github_client import get_repo_data_from_url, parse_github_url, GitHubError
     from config import get_settings
+    import requests
 
     pl_url = _product_launch_url()
     if not check_remotion_service(pl_url):
@@ -119,21 +131,32 @@ def render_remotion_product_launch(
         repo_data = get_repo_data_from_url(repo_url, token=token)
 
         log.info("Rendering product-launch video (style=%s, duration=%ds)", style, duration)
-        video_path = render_product_launch_video(
-            repo_data=repo_data,
-            style=style,
-            duration=duration,
-            base_url=pl_url,
-            output_path=output_path,
-        )
+        payload = {"repo_data": repo_data, "style": style, "duration": duration}
+        resp = requests.post(f"{pl_url}/api/render", json=payload, timeout=300)
 
-        if video_path:
-            return (
-                f"✅ Product-launch video rendered for '{owner}/{repo}'.\n"
-                f"Video saved to: {video_path}\n"
-                "Use add_clip_to_timeline_tool to add this video to the timeline."
-            )
-        return "❌ Product-launch render returned no video. Check backend logs."
+        if resp.status_code == 413:
+            return f"❌ Render failed: {resp.json().get('error', 'File too large for upload (50 MB cap).')}"
+        if resp.status_code != 200:
+            return f"❌ Product-launch render failed: HTTP {resp.status_code} — {resp.text[:200]}"
+
+        data = resp.json()
+        if data.get("status") != "completed":
+            return f"❌ Product-launch render failed: {data.get('error', 'unknown error')}"
+
+        supabase_url = data.get("supabase_url", "")
+        supabase_path = data.get("supabase_path", "")
+
+        if not supabase_url:
+            return "❌ Render succeeded but no Supabase URL was returned."
+
+        log.info("Product-launch video uploaded to Supabase: %s", supabase_url)
+        return (
+            f"✅ Product-launch video rendered and uploaded for '{owner}/{repo}'.\n"
+            f"Supabase URL: {supabase_url}\n"
+            f"Supabase path: {supabase_path}\n"
+            f"Now call fetch_remotion_video_from_supabase_tool with supabase_url='{supabase_url}' "
+            f"to download it and add it to the project files."
+        )
 
     except GitHubError as e:
         return f"Error fetching GitHub data: {e}"
@@ -162,8 +185,8 @@ def get_remotion_tools_for_langchain():
         duration: int = 30,
     ) -> str:
         """
-        Render a video for a GitHub repository using the full Remotion service (port 4500).
-        Fetches repo data, submits a render job, waits for completion, and saves the video.
+        Render a video for a GitHub repository using the full Remotion service.
+        Fetches repo data, submits an async render job, polls until done, and saves locally.
 
         Args:
             repo_url: GitHub repository URL (e.g. github.com/owner/repo)
@@ -179,8 +202,11 @@ def get_remotion_tools_for_langchain():
         duration: int = 30,
     ) -> str:
         """
-        Render a product-launch video for a GitHub repository using the simpler Remotion service (port 3100).
-        Good for quick promotional videos. Fetches repo data, renders, and saves the video.
+        Render a product-launch promotional video for a GitHub repository.
+        Fetches repo data, renders via the product-launch Remotion service, and uploads
+        the result to Supabase storage (bucket: product_demo, 50 MB cap).
+        Returns the Supabase public URL — then call fetch_remotion_video_from_supabase_tool
+        with that URL to import the video into the project.
 
         Args:
             repo_url: GitHub repository URL (e.g. github.com/owner/repo)
@@ -189,8 +215,21 @@ def get_remotion_tools_for_langchain():
         """
         return render_remotion_product_launch(repo_url, style=style, duration=duration)
 
+    @tool
+    def fetch_remotion_video_from_supabase_tool(supabase_url: str) -> str:
+        """
+        FRONTEND TOOL — Download the rendered Remotion video from its Supabase public URL
+        and import it into the project files panel.
+        Call this immediately after render_remotion_product_launch_tool succeeds.
+
+        Args:
+            supabase_url: The public Supabase URL returned by render_remotion_product_launch_tool
+        """
+        return _NO_FRONTEND
+
     return [
         check_remotion_health_tool,
         render_remotion_from_repo_tool,
         render_remotion_product_launch_tool,
+        fetch_remotion_video_from_supabase_tool,
     ]
