@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     remotion_url: str = Field(default="http://localhost:4500/api/v1", alias="REMOTION_URL")
     remotion_product_launch_url: str = Field(default="http://localhost:3100", alias="REMOTION_PRODUCT_LAUNCH_URL")
 
+    # Supabase (usage tracking + auth verification)
+    supabase_url: str = Field(default="https://fmeawyasfffvyoactenu.supabase.co", alias="SUPABASE_URL")
+    supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
+
     # Agent config
     agent_max_iterations: int = Field(default=15, alias="ZENVI_AGENT_MAX_ITERATIONS")
     agent_timeout_seconds: int = Field(default=120, alias="ZENVI_AGENT_TIMEOUT")
@@ -81,6 +85,8 @@ class Settings(BaseSettings):
             "remotion-url": self.remotion_url,
             "remotion-product-launch-url": self.remotion_product_launch_url,
             "ai-default-model": self.default_model,
+            "supabase-url": self.supabase_url,
+            "supabase-anon-key": self.supabase_anon_key,
             "aws-access-key-id": self.aws_access_key_id,
             "aws-secret-access-key": self.aws_secret_access_key,
             "aws-region": self.aws_region,

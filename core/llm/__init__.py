@@ -19,9 +19,21 @@ def get_settings():
 
 
 def get_model(model_id):
-    """Return a LangChain BaseChatModel for the given model_id, or None."""
+    """Return a LangChain BaseChatModel for the given model_id, or None.
+
+    The returned model has ZenviUsageCallback pre-attached so every call
+    is automatically recorded to the usage tracker.
+    """
     settings = get_settings()
-    return _build_model(model_id, settings)
+    model = _build_model(model_id, settings)
+    if model is None:
+        return None
+    try:
+        from core.llm.usage_callback import ZenviUsageCallback
+        model = model.with_config(callbacks=[ZenviUsageCallback()])
+    except Exception as exc:
+        log.debug("Could not attach usage callback: %s", exc)
+    return model
 
 
 def list_models():

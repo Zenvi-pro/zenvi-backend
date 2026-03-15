@@ -32,6 +32,9 @@ def _get_or_create_session(session_id: Optional[str] = None, model_id: Optional[
 @router.post("", response_model=ChatResponse)
 def send_message(req: ChatRequest):
     """Send a chat message and get a response (synchronous, no tool delegation)."""
+    if req.auth_token:
+        from core.llm.usage_tracker import UsageTracker
+        UsageTracker.instance().set_token(req.auth_token)
     chat, sid = _get_or_create_session(req.session_id, req.model_id)
     response = chat.send_message(req.message, context=req.context, model_id=req.model_id)
     return ChatResponse(response=response, session_id=sid, model_id=req.model_id or "default")
@@ -107,6 +110,10 @@ async def chat_websocket(websocket: WebSocket):
                 message = data.get("message", "")
                 model_id = data.get("model_id")
                 session_id = data.get("session_id")
+                auth_token = data.get("auth_token")
+                if auth_token:
+                    from core.llm.usage_tracker import UsageTracker
+                    UsageTracker.instance().set_token(auth_token)
 
                 chat, sid = _get_or_create_session(session_id, model_id)
 

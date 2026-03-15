@@ -39,6 +39,7 @@ class ChatRequest(BaseModel):
     model_id: Optional[str] = None
     context: Optional[Dict[str, Any]] = None
     session_id: Optional[str] = None
+    auth_token: Optional[str] = None  # JWT forwarded from frontend for usage tracking
 
 
 class ChatResponse(BaseModel):
