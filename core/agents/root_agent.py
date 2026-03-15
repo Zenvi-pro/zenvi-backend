@@ -56,6 +56,11 @@ def run_root_agent(model_id, messages, tool_executor=None, timeout_seconds=120):
             return sub_agents.run_product_launch_agent(mid, task, te)
 
         @tool
+        def invoke_remotion_agent(task: str) -> str:
+            """Route to the Remotion rendering agent. Use when user mentions Remotion, remotion render, or wants to render a video using Remotion from a GitHub repository."""
+            return sub_agents.run_remotion_agent(mid, task, te)
+
+        @tool
         def invoke_directors(task: str) -> str:
             """Route to directors for video analysis, critique, and improvement planning. Use when user asks to analyze, critique, improve, or get feedback on their video."""
             from core.directors.director_orchestrator import run_directors
@@ -112,7 +117,8 @@ def run_root_agent(model_id, messages, tool_executor=None, timeout_seconds=120):
         return [
             invoke_video_agent, invoke_manim_agent, invoke_voice_music_agent,
             invoke_music_agent, invoke_transitions_agent, invoke_research_agent,
-            invoke_product_launch_agent, invoke_directors, spawn_parallel_versions,
+            invoke_product_launch_agent, invoke_remotion_agent, invoke_directors,
+            spawn_parallel_versions,
         ]
 
     root_tools = make_invoke_tools()

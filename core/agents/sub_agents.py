@@ -12,6 +12,7 @@ from core.chat.prompts import (
     TRANSITIONS_SYSTEM_PROMPT,
     RESEARCH_SYSTEM_PROMPT,
     PRODUCT_LAUNCH_SYSTEM_PROMPT,
+    REMOTION_SYSTEM_PROMPT,
 )
 
 
@@ -183,6 +184,37 @@ def run_product_launch_agent(model_id, task_or_messages, tool_executor=None):
         tools=tools,
         tool_executor=tool_executor,
         system_prompt=PRODUCT_LAUNCH_SYSTEM_PROMPT,
+    )
+
+
+def run_remotion_agent(model_id, task_or_messages, tool_executor=None):
+    """Run the Remotion rendering agent."""
+    from core.chat.agent_runner import run_agent_with_tools
+    try:
+        from core.tools.remotion_tools import get_remotion_tools_for_langchain
+    except ImportError as e:
+        log.debug("Remotion tools not available: %s", e)
+        return "Remotion agent is not available."
+
+    if isinstance(task_or_messages, str):
+        messages = [{"role": "user", "content": task_or_messages}]
+    else:
+        messages = list(task_or_messages)
+
+    tools = get_remotion_tools_for_langchain()
+    # Also include openshot tools so the agent can add the rendered video to the timeline
+    try:
+        from core.tools.openshot import get_all_openshot_tools
+        tools.extend(get_all_openshot_tools())
+    except ImportError:
+        pass
+
+    return run_agent_with_tools(
+        model_id=model_id,
+        messages=messages,
+        tools=tools,
+        tool_executor=tool_executor,
+        system_prompt=REMOTION_SYSTEM_PROMPT,
     )
 
 
