@@ -204,6 +204,24 @@ app.post('/api/render', async (req, res) => {
   }
 });
 
+// DELETE /api/cleanup  — delete a rendered file from Supabase after the client imports it
+app.delete('/api/cleanup', async (req, res) => {
+  const { supabase_path } = req.body || {};
+  if (!supabase_path) {
+    return res.status(400).json({ error: 'supabase_path is required' });
+  }
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase.storage.from(BUCKET).remove([supabase_path]);
+    if (error) throw new Error(error.message);
+    console.log(`[supabase] Deleted "${supabase_path}" from bucket "${BUCKET}"`);
+    res.json({ status: 'deleted', path: supabase_path });
+  } catch (err) {
+    console.error('[cleanup] Failed to delete from Supabase:', err);
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------

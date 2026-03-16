@@ -154,8 +154,9 @@ def render_remotion_product_launch(
             f"✅ Product-launch video rendered and uploaded for '{owner}/{repo}'.\n"
             f"Supabase URL: {supabase_url}\n"
             f"Supabase path: {supabase_path}\n"
-            f"Now call fetch_remotion_video_from_supabase_tool with supabase_url='{supabase_url}' "
-            f"to download it and add it to the project files."
+            f"Now call fetch_remotion_video_from_supabase_tool with "
+            f"supabase_url='{supabase_url}' and supabase_path='{supabase_path}' "
+            f"to download it, import it into the project files, and delete it from Supabase."
         )
 
     except GitHubError as e:
@@ -216,14 +217,15 @@ def get_remotion_tools_for_langchain():
         return render_remotion_product_launch(repo_url, style=style, duration=duration)
 
     @tool
-    def fetch_remotion_video_from_supabase_tool(supabase_url: str) -> str:
+    def fetch_remotion_video_from_supabase_tool(supabase_url: str, supabase_path: str = "") -> str:
         """
-        FRONTEND TOOL — Download the rendered Remotion video from its Supabase public URL
-        and import it into the project files panel.
+        FRONTEND TOOL — Download the rendered Remotion video from its Supabase public URL,
+        import it into the project files panel, then delete the file from Supabase storage.
         Call this immediately after render_remotion_product_launch_tool succeeds.
 
         Args:
             supabase_url: The public Supabase URL returned by render_remotion_product_launch_tool
+            supabase_path: The Supabase storage path returned by render_remotion_product_launch_tool (used for post-import cleanup)
         """
         return _NO_FRONTEND
 
