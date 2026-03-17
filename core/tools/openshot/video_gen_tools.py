@@ -40,10 +40,30 @@ def generate_transition_clip_tool(clip_a_id: str, clip_b_id: str, prompt_hint: s
     return _NO_FRONTEND
 
 
+@tool
+def replace_object_in_selected_clip_tool(description: str, duration_seconds: str = "") -> str:
+    """Replace or update a specific object, element, or visual aspect in the currently selected timeline clip using Kling V2V video reference. The selected clip is used as a visual reference so the generated video maintains the same scene, motion, and style — only the described change is applied. The result is added to the project files panel.
+
+    Use this tool when the user wants to:
+    - Replace an object (e.g. "replace the red car with a blue truck")
+    - Update a visual element (e.g. "change the background to a beach")
+    - Restyle the scene (e.g. "make it look like nighttime")
+    - Transform a character or prop
+
+    Do NOT use this for inserting new content at a specific point — use insert_kling_v2v_clip_into_selected_clip_tool for that.
+
+    Args:
+        description: what to replace or update in the clip (e.g. "replace the car with a truck")
+        duration_seconds: optional duration override (5 or 10); defaults to match source clip length (max 10s)
+    """
+    return _NO_FRONTEND
+
+
 def get_video_gen_tools():
     """Return all video generation LangChain tools."""
     return [
         generate_video_and_add_to_timeline_tool,
         insert_kling_v2v_clip_into_selected_clip_tool,
         generate_transition_clip_tool,
+        replace_object_in_selected_clip_tool,
     ]

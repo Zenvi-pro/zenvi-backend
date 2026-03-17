@@ -52,6 +52,13 @@ SEARCH vs SLICE — choose based on the user's verb:
             "second occurrence" → query="<description>", occurrence="2"
       → only suggest a different description if the tool explicitly returns "no results"
 
+  • MODIFY/REPLACE ("change", "replace", "turn X into Y", "transform", "make it look like", \
+"swap", "convert", "update the", "restyle"):
+      → call replace_object_in_selected_clip_tool(description) IMMEDIATELY
+      → description = what to replace or update (e.g. "change the dog to a dragon")
+      → include optional duration_seconds only if the user specifies a length
+      → do NOT also call generate_video_and_add_to_timeline_tool — this tool handles everything
+
 NEVER ask the user for exact timestamps, seconds, or frame numbers. Always use semantic search/slice.\
 """
 

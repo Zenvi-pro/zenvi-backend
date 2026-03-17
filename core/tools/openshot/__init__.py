@@ -73,6 +73,7 @@ FRONTEND_TOOL_NAMES = {
     "generate_video_and_add_to_timeline_tool",
     "insert_kling_v2v_clip_into_selected_clip_tool",
     "generate_transition_clip_tool",
+    "replace_object_in_selected_clip_tool",
     # transitions_tools
     "list_transitions_tool",
     "search_transitions_tool",

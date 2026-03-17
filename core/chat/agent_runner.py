@@ -116,6 +116,7 @@ def run_agent_with_tools(
             "insert_kling_v2v_clip_into_selected_clip_tool",
             "generate_video_and_add_to_timeline_tool",
             "generate_transition_clip_tool",
+            "replace_object_in_selected_clip_tool",
             "generate_manim_video_tool",
             "invoke_video_agent",
         }
