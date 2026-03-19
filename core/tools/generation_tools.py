@@ -18,15 +18,17 @@ def generate_video(prompt: str, duration_seconds: int = 4, resolution: str = "72
         if not api_key:
             return "Error: Runware API key not configured."
 
-        result = runware_generate_video(
+        url, err = runware_generate_video(
             api_key=api_key,
             prompt=prompt,
-            duration=duration_seconds,
+            duration_seconds=duration_seconds,
         )
-        if result and result.get("url"):
+        if err:
+            return f"Error: {err}"
+        if url:
             output_dir = tempfile.mkdtemp(prefix="zenvi_gen_")
             output_path = os.path.join(output_dir, "generated_video.mp4")
-            download_video_to_path(result["url"], output_path)
+            download_video_to_path(url, output_path)
             return f"Video generated: {output_path}"
         return "Error: Video generation failed — no URL returned."
     except Exception as e:

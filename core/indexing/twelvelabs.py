@@ -271,13 +271,25 @@ def search_index(query: str, *, index_id: str = "", top_k: int = 5, video_id: st
         if video_id:
             search_kwargs["filter"] = _json.dumps({"id": [video_id]})
 
-        results = client.search.query(**search_kwargs)
+        results = client.search.create(**search_kwargs)
         clips = []
-        for r in list(results)[:top_k]:
+        for r in (results.data or [])[:top_k]:
             vid = getattr(r, "video_id", None)
+            # Marengo 3.0 returns 'rank' (int, 1=best) instead of 'score' (float).
+            # Normalise to a score: rank 1 → 1.0, rank N → 1/N. Fall back to
+            # 'score' for older index models that don't include 'rank'.
+            rank_val = getattr(r, "rank", None)
+            score_val = getattr(r, "score", None)
+            if rank_val is not None:
+                score = 1.0 / max(int(rank_val), 1)
+            elif score_val is not None:
+                score = float(score_val)
+            else:
+                score = 0.0
             clips.append({
                 "video_id": vid,
-                "score": float(getattr(r, "score", None) or 0),
+                "score": score,
+                "rank": int(rank_val) if rank_val is not None else None,
                 "start": float(getattr(r, "start", None) or 0),
                 "end": float(getattr(r, "end", None) or 0),
                 "filename": getattr(r, "filename", None) or "",

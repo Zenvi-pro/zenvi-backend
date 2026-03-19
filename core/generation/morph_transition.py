@@ -133,21 +133,23 @@ def generate_morph_transition(
                 log.error("Runware API key not configured")
                 return None
 
-            morph_result = runware_generate_morph_video(
+            morph_video_url, morph_err = runware_generate_morph_video(
                 api_key=api_key,
-                image_url_1=url1,
-                image_url_2=url2,
+                prompt=(
+                    "Gradually evolve the opening scene into the closing scene through a fluid, "
+                    "continuous motion. Preserve the appearance and identity of all people and key "
+                    "objects while naturally transitioning the pose, setting, and lighting from "
+                    "the first frame to the last."
+                ),
+                start_image_url=url1,
+                end_image_url=url2,
             )
 
-            if not morph_result:
-                log.error("Runware morph generation returned no result")
+            if morph_err or not morph_video_url:
+                log.error("Runware morph generation failed: %s", morph_err)
                 return None
 
-            video_url = morph_result if isinstance(morph_result, str) else morph_result.get("video_url", "")
-
-            if not video_url:
-                log.error("No video URL in morph result")
-                return None
+            video_url = morph_video_url
 
             if not output_path:
                 output_path = os.path.join(work_dir, "morph_transition.mp4")
