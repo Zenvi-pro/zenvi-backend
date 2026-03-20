@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     remotion_url: str = Field(default="http://localhost:4500/api/v1", alias="REMOTION_URL")
     remotion_product_launch_url: str = Field(default="http://localhost:3100", alias="REMOTION_PRODUCT_LAUNCH_URL")
 
+    # Pexels (stock video search)
+    pexels_api_key: str = Field(default="", alias="PEXELS_API_KEY")
+
     # Supabase (usage tracking + auth verification)
     supabase_url: str = Field(default="https://fmeawyasfffvyoactenu.supabase.co", alias="SUPABASE_URL")
     supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
@@ -85,6 +88,7 @@ class Settings(BaseSettings):
             "remotion-url": self.remotion_url,
             "remotion-product-launch-url": self.remotion_product_launch_url,
             "ai-default-model": self.default_model,
+            "pexels-api-key": self.pexels_api_key,
             "supabase-url": self.supabase_url,
             "supabase-anon-key": self.supabase_anon_key,
             "aws-access-key-id": self.aws_access_key_id,

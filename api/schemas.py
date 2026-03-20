@@ -270,3 +270,45 @@ class AnalysisQueueStatus(BaseModel):
 class DeleteIndexedVideoParams(BaseModel):
     index_id: str
     video_id: str
+
+
+# ---- Pexels Stock Video ----
+class PexelsVideoFile(BaseModel):
+    id: int
+    quality: Optional[str] = ""
+    file_type: Optional[str] = ""
+    width: Optional[int] = None
+    height: Optional[int] = None
+    fps: Optional[float] = None
+    link: Optional[str] = ""
+
+
+class PexelsVideo(BaseModel):
+    id: int
+    width: int = 0
+    height: int = 0
+    duration: int = 0
+    image: str = ""   # fallback thumbnail URL
+    url: str = ""     # pexels.com page URL
+    video_files: List[PexelsVideoFile] = []
+    video_pictures: List[Dict[str, Any]] = []   # [{id, picture, nr}, ...]
+    user_name: str = ""
+
+
+class PexelsSearchResponse(BaseModel):
+    videos: List[PexelsVideo] = []
+    total_results: int = 0
+    page: int = 1
+    per_page: int = 15
+    error: Optional[str] = None
+
+
+class PexelsDownloadRequest(BaseModel):
+    video_id: int
+    link: str          # direct MP4 URL from video_files[n].link
+    filename: str = "" # desired output filename (without extension)
+
+
+class PexelsDownloadResponse(BaseModel):
+    local_path: str = ""
+    error: Optional[str] = None

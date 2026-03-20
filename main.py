@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     from api.routes.media import router as media_router
     from api.routes.research import router as research_router
     from api.routes.directors import router as directors_router
+    from api.routes.pexels import router as pexels_router
 
     api_prefix = "/api/v1"
     app.include_router(models_router, prefix=api_prefix)
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(media_router, prefix=api_prefix)
     app.include_router(research_router, prefix=api_prefix)
     app.include_router(directors_router, prefix=api_prefix)
+    app.include_router(pexels_router, prefix=api_prefix)
 
     @app.get("/health")
     def health():
