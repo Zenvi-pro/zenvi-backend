@@ -1,5 +1,10 @@
 """
 Chat endpoints — REST for simple request/response, WebSocket for streaming + tool delegation.
+
+Session memory is backed by Pinecone (one namespace per session_id).
+Each exchange is embedded and upserted so the agent can RAG relevant
+prior context on every new turn.  Clearing or deleting a session also
+deletes its Pinecone namespace to free storage.
 """
 
 import json
@@ -29,6 +34,44 @@ def _get_or_create_session(session_id: Optional[str] = None, model_id: Optional[
     return chat, sid
 
 
+def _get_memory_context(session_id: str, user_message: str) -> Optional[str]:
+    """
+    Query Pinecone for exchanges relevant to *user_message* and return
+    a formatted context string (or None if nothing relevant found).
+    """
+    from core.memory.pinecone_memory import get_memory, format_memory_context
+    mem = get_memory()
+    if mem is None:
+        return None
+    exchanges = mem.query_relevant(session_id, user_message)
+    if not exchanges:
+        return None
+    return format_memory_context(exchanges)
+
+
+def _upsert_exchange(session_id: str, user_msg: str, assistant_msg: str) -> None:
+    """Store an exchange in Pinecone in a background thread (non-blocking)."""
+    from core.memory.pinecone_memory import get_memory
+    mem = get_memory()
+    if mem is None:
+        return
+    import threading
+    threading.Thread(
+        target=mem.upsert_exchange,
+        args=(session_id, user_msg, assistant_msg),
+        daemon=True,
+    ).start()
+
+
+def _delete_pinecone_namespace(session_id: str) -> None:
+    """Delete the Pinecone namespace for *session_id* (synchronous — called from REST endpoints)."""
+    from core.memory.pinecone_memory import get_memory
+    mem = get_memory()
+    if mem is None:
+        return
+    mem.delete_session(session_id)
+
+
 @router.post("", response_model=ChatResponse)
 def send_message(req: ChatRequest):
     """Send a chat message and get a response (synchronous, no tool delegation)."""
@@ -36,7 +79,16 @@ def send_message(req: ChatRequest):
         from core.llm.usage_tracker import UsageTracker
         UsageTracker.instance().set_token(req.auth_token)
     chat, sid = _get_or_create_session(req.session_id, req.model_id)
-    response = chat.send_message(req.message, context=req.context, model_id=req.model_id)
+
+    memory_ctx = _get_memory_context(sid, req.message)
+    response = chat.send_message(
+        req.message, context=req.context, model_id=req.model_id,
+        memory_context=memory_ctx,
+    )
+
+    # Persist this exchange to Pinecone for future RAG
+    _upsert_exchange(sid, req.message, response)
+
     return ChatResponse(response=response, session_id=sid, model_id=req.model_id or "default")
 
 
@@ -59,18 +111,20 @@ def get_history(session_id: str):
 
 @router.post("/clear/{session_id}", response_model=StatusResponse)
 def clear_session(session_id: str):
-    """Clear a chat session."""
+    """Clear a chat session and delete its Pinecone namespace."""
     if session_id in _sessions:
         _sessions[session_id].clear_session()
+        _delete_pinecone_namespace(session_id)
         return StatusResponse(success=True, message="Session cleared")
     return StatusResponse(success=False, message="Session not found")
 
 
 @router.delete("/session/{session_id}", response_model=StatusResponse)
 def delete_session(session_id: str):
-    """Delete a chat session."""
+    """Delete a chat session and its Pinecone namespace."""
     if session_id in _sessions:
         del _sessions[session_id]
+        _delete_pinecone_namespace(session_id)
         return StatusResponse(success=True, message="Session deleted")
     return StatusResponse(success=False, message="Session not found")
 
@@ -116,6 +170,7 @@ async def chat_websocket(websocket: WebSocket):
                     UsageTracker.instance().set_token(auth_token)
 
                 chat, sid = _get_or_create_session(session_id, model_id)
+                memory_ctx = _get_memory_context(sid, message)
 
                 def make_tool_executor():
                     """Create a synchronous tool executor that bridges to the async WebSocket."""
@@ -158,14 +213,31 @@ async def chat_websocket(websocket: WebSocket):
                 def run_in_thread():
                     try:
                         from core.chat.agent_runner import run_agent
+                        from core.chat.functionality import MessageRole
+
+                        # Save user message to session so history is retained
+                        chat.current_session.add_message(MessageRole.USER, message)
+
+                        # Build messages list, inserting RAG context before the user turn
+                        history = chat.current_session.get_conversation_history()
+                        if memory_ctx:
+                            history = list(history[:-1]) + [
+                                {"role": "memory", "content": memory_ctx},
+                                history[-1],
+                            ]
+
                         response = run_agent(
                             model_id or "default",
-                            chat.current_session.get_conversation_history() + [{"role": "user", "content": message}],
+                            history,
                             tool_executor=tool_executor,
                         )
-                        chat.current_session.add_message(
-                            chat.current_session.messages[0].role.__class__("user"), message
-                        ) if False else None  # noqa — history is managed by AIChat
+
+                        # Save assistant response to session
+                        chat.current_session.add_message(MessageRole.ASSISTANT, response)
+
+                        # Persist exchange to Pinecone for future RAG
+                        _upsert_exchange(sid, message, response)
+
                         agent_result["response"] = response
                     except Exception as e:
                         log.error("WebSocket agent error: %s", e, exc_info=True)

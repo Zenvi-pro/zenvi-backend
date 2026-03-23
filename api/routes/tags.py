@@ -71,10 +71,12 @@ async def analyze_video_tags(req: dict):
             if provider.is_available():
                 result = await provider.analyze_image(video_path)
                 tags = result.to_dict()
-                # Store tags in tag manager
+                # Store tags in tag manager under the caller-supplied file_id
+                # (falls back to the basename so the entry is at least findable
+                # by path when no id is provided).
                 from core.managers.tags import get_tag_manager
                 import os
-                file_id = os.path.basename(video_path)
+                file_id = req.get("file_id") or os.path.basename(video_path)
                 get_tag_manager().add_tags(file_id, tags)
                 return {
                     "analyzed": True,

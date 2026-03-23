@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     supabase_url: str = Field(default="https://fmeawyasfffvyoactenu.supabase.co", alias="SUPABASE_URL")
     supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
 
+    # Pinecone (per-session vector memory)
+    pinecone_api_key: str = Field(default="", alias="PINECONE_API_KEY")
+
     # Agent config
     agent_max_iterations: int = Field(default=15, alias="ZENVI_AGENT_MAX_ITERATIONS")
     agent_timeout_seconds: int = Field(default=120, alias="ZENVI_AGENT_TIMEOUT")
@@ -91,6 +94,7 @@ class Settings(BaseSettings):
             "pexels-api-key": self.pexels_api_key,
             "supabase-url": self.supabase_url,
             "supabase-anon-key": self.supabase_anon_key,
+            "pinecone-api-key": self.pinecone_api_key,
             "aws-access-key-id": self.aws_access_key_id,
             "aws-secret-access-key": self.aws_secret_access_key,
             "aws-region": self.aws_region,

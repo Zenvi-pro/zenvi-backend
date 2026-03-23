@@ -103,6 +103,9 @@ def run_agent_with_tools(
             lc_messages.append(HumanMessage(content=content))
         elif role == "assistant" and content:
             lc_messages.append(AIMessage(content=content))
+        elif role == "memory" and content:
+            # Injected RAG context — added as a system note before the user turn
+            lc_messages.append(SystemMessage(content=content))
 
     if not any(isinstance(m, HumanMessage) for m in lc_messages):
         return "Error: No message to send."

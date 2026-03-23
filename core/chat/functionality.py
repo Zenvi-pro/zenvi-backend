@@ -17,6 +17,7 @@ class MessageRole(Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+    MEMORY = "memory"  # Ephemeral RAG context injected before each agent run
 
 
 class ChatMessage:
@@ -61,6 +62,10 @@ class ChatSession:
         self.messages = system_msgs
         self.updated_at = datetime.now()
 
+    def purge_memory_messages(self):
+        """Remove ephemeral MEMORY-role messages after agent completes."""
+        self.messages = [m for m in self.messages if m.role != MessageRole.MEMORY]
+
     def attach_context(self, key: str, value: Any):
         self.context_data[key] = value
 
@@ -97,22 +102,33 @@ class AIChat:
         context: Optional[Dict[str, Any]] = None,
         model_id: Optional[str] = None,
         tool_executor=None,
+        memory_context: Optional[str] = None,
     ) -> str:
         """
         Send a message and get a response.
         tool_executor: optional callback for delegating tool calls to the frontend.
+        memory_context: optional RAG context string retrieved from Pinecone.
         """
         if not self.current_session:
             self._init_session()
 
         self.current_session.add_message(MessageRole.USER, user_input, context)
 
-        response = self._generate_response(user_input, model_id=model_id, tool_executor=tool_executor)
+        response = self._generate_response(
+            user_input, model_id=model_id, tool_executor=tool_executor,
+            memory_context=memory_context,
+        )
 
         self.current_session.add_message(MessageRole.ASSISTANT, response)
         return response
 
-    def _generate_response(self, user_input: str, model_id: Optional[str] = None, tool_executor=None) -> str:
+    def _generate_response(
+        self,
+        user_input: str,
+        model_id: Optional[str] = None,
+        tool_executor=None,
+        memory_context: Optional[str] = None,
+    ) -> str:
         """Generate a response using the LangChain agent."""
         # Check if this is a media management command
         lower = (user_input or "").lower()
@@ -152,6 +168,15 @@ class AIChat:
         messages = self.current_session.get_conversation_history() if self.current_session else []
         if not messages or messages[-1].get("role") != "user" or messages[-1].get("content") != user_input:
             messages = list(messages) + [{"role": "user", "content": user_input}]
+
+        # Inject Pinecone RAG context just before the final user message
+        if memory_context:
+            insert_pos = len(messages) - 1  # before last (user) message
+            messages = (
+                list(messages[:insert_pos])
+                + [{"role": "memory", "content": memory_context}]
+                + list(messages[insert_pos:])
+            )
 
         try:
             result = run_agent(resolved_model_id, messages, tool_executor=tool_executor)
