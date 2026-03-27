@@ -1,5 +1,5 @@
 """
-Sub-agents: Video, Manim, Voice/Music, Music, Transitions, Research, Product Launch.
+Sub-agents: Video, Manim, Voice/Music, Transitions, Research, Product Launch.
 Ported from zenvi-core; no Qt dependency.
 """
 
@@ -8,7 +8,6 @@ from core.chat.prompts import (
     VIDEO_AGENT_SYSTEM_PROMPT,
     MANIM_SYSTEM_PROMPT,
     VOICE_MUSIC_SYSTEM_PROMPT,
-    MUSIC_SYSTEM_PROMPT,
     TRANSITIONS_SYSTEM_PROMPT,
     RESEARCH_SYSTEM_PROMPT,
     PRODUCT_LAUNCH_SYSTEM_PROMPT,
@@ -87,27 +86,6 @@ def run_voice_music_agent(model_id, task_or_messages, tool_executor=None):
         tools=tools,
         tool_executor=tool_executor,
         system_prompt=VOICE_MUSIC_SYSTEM_PROMPT,
-    )
-
-
-def run_music_agent(model_id, task_or_messages, tool_executor=None):
-    """Run the Music agent (Suno) with OpenShot + Suno tools."""
-    from core.chat.agent_runner import run_agent_with_tools
-    from core.tools.music_tools import get_music_tools_for_langchain
-
-    if isinstance(task_or_messages, str):
-        messages = [{"role": "user", "content": task_or_messages}]
-    else:
-        messages = list(task_or_messages)
-
-    tools = _get_server_side_video_tools()  # includes openshot tools for clip listing
-    tools.extend(get_music_tools_for_langchain())
-    return run_agent_with_tools(
-        model_id=model_id,
-        messages=messages,
-        tools=tools,
-        tool_executor=tool_executor,
-        system_prompt=MUSIC_SYSTEM_PROMPT,
     )
 
 

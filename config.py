@@ -47,9 +47,6 @@ class Settings(BaseSettings):
     # GitHub (product launch agent)
     github_token: str = Field(default="", alias="GITHUB_TOKEN")
 
-    # Suno (music agent)
-    suno_token: str = Field(default="", alias="SUNO_TOKEN")
-
     # NVIDIA Edge Device
     nvidia_edge_url: str = Field(default="", alias="NVIDIA_EDGE_URL")
 
@@ -86,7 +83,6 @@ class Settings(BaseSettings):
             "runware-api-key": self.runware_api_key,
             "perplexity-api-key": self.perplexity_api_key,
             "github-token": self.github_token,
-            "suno-token": self.suno_token,
             "nvidia-edge-url": self.nvidia_edge_url,
             "remotion-url": self.remotion_url,
             "remotion-product-launch-url": self.remotion_product_launch_url,

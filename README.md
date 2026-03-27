@@ -74,9 +74,6 @@ PERPLEXITY_API_KEY=...
 # Product launch / Remotion agents
 GITHUB_TOKEN=ghp_...            # optional but recommended to avoid rate limits
 
-# Music agent
-SUNO_TOKEN=...
-
 # Remotion rendering services (deployed URLs once public)
 REMOTION_URL=http://localhost:4500/api/v1
 REMOTION_PRODUCT_LAUNCH_URL=http://localhost:3100

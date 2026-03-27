@@ -15,7 +15,6 @@ def submit_sub_agent(agent_name, model_id, messages, tool_executor=None):
         "video": sub_agents.run_video_agent,
         "manim": sub_agents.run_manim_agent,
         "voice_music": sub_agents.run_voice_music_agent,
-        "music": sub_agents.run_music_agent,
         "transitions": sub_agents.run_transitions_agent,
         "research": sub_agents.run_research_agent,
         "product_launch": sub_agents.run_product_launch_agent,

@@ -36,11 +36,6 @@ def run_root_agent(model_id, messages, tool_executor=None, timeout_seconds=120):
             return sub_agents.run_voice_music_agent(mid, task, te)
 
         @tool
-        def invoke_music_agent(task: str) -> str:
-            """Route to the music agent for Suno background music generation and timeline insertion."""
-            return sub_agents.run_music_agent(mid, task, te)
-
-        @tool
         def invoke_transitions_agent(task: str) -> str:
             """Route to the transitions agent for adding professional transitions and effects. Has 412+ transitions: fades, wipes, circles, ripples, blurs, artistic effects."""
             return sub_agents.run_transitions_agent(mid, task, te)
@@ -94,7 +89,7 @@ def run_root_agent(model_id, messages, tool_executor=None, timeout_seconds=120):
 
             type_to_agent = {
                 "video": "video", "manim": "manim",
-                "voice_music": "voice_music", "music": "music",
+                "voice_music": "voice_music",
                 "transitions": "transitions", "research": "research",
                 "product_launch": "product_launch",
             }
@@ -116,7 +111,7 @@ def run_root_agent(model_id, messages, tool_executor=None, timeout_seconds=120):
 
         return [
             invoke_video_agent, invoke_manim_agent, invoke_voice_music_agent,
-            invoke_music_agent, invoke_transitions_agent, invoke_research_agent,
+            invoke_transitions_agent, invoke_research_agent,
             invoke_product_launch_agent, invoke_remotion_agent, invoke_directors,
             spawn_parallel_versions,
         ]

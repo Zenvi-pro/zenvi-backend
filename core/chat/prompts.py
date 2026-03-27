@@ -6,7 +6,6 @@ TOOLS:
 - invoke_video_agent: timeline editing, clips, export, video generation, splitting, adding clips, AI object replacement. Also handles ALL @selected_clip operations: find timestamps, search clip content, slice/cut at a moment.
 - invoke_manim_agent: educational or mathematical animation videos (Manim).
 - invoke_voice_music_agent: narration, TTS, voice overlays.
-- invoke_music_agent: background music generation via Suno.
 - invoke_transitions_agent: transitions and effects (fades, wipes, etc.).
 - invoke_research_agent: web research, content discovery, theme/aesthetic planning.
 - invoke_remotion_agent: product launch and promotional videos from GitHub repositories (uses Remotion rendering service). DEFAULT for product launch requests.
@@ -21,7 +20,6 @@ ROUTING (first match wins):
 - "product launch" + "manim" explicitly → invoke_product_launch_agent
 - transitions / fade / wipe / effect → invoke_transitions_agent
 - research / theme / aesthetic / find images → invoke_research_agent
-- background music / Suno → invoke_music_agent
 - narration / TTS / voice → invoke_voice_music_agent
 - analyze / critique / feedback → invoke_directors
 - multiple content types at once → spawn_parallel_versions
@@ -100,16 +98,6 @@ VOICE_MUSIC_SYSTEM_PROMPT = (
     "First check if OpenAI is configured with test_openai_tts_api_key_tool.\n\n"
     "Available voices: alloy (neutral), echo (male), fable (expressive), onyx (deep male), nova (female), shimmer (soft female). "
     "Use tts-1 model for speed, tts-1-hd for quality."
-)
-
-
-MUSIC_SYSTEM_PROMPT = (
-    "You are the Zenvi music agent. You generate and add background music that fits the user's video. "
-    "First, understand the project: call get_project_info_tool, list_clips_tool. "
-    "Then decide a Suno request: use topic+tags for simple mode, or prompt+tags for custom lyrics mode. "
-    "Prefer instrumental background music unless the user explicitly wants vocals. "
-    "Call generate_music_and_add_to_timeline_tool to generate/download/import the MP3. "
-    "If music generation fails, call test_suno_token_tool to diagnose."
 )
 
 

@@ -79,8 +79,6 @@ FRONTEND_TOOL_NAMES = {
     "search_transitions_tool",
     "add_transition_between_clips_tool",
     "add_transition_to_clip_tool",
-    # music_tools (frontend-delegated: timeline insertion)
-    "add_music_to_timeline_tool",
     # tts_tools (frontend-delegated: timeline insertion)
     "add_tts_audio_to_timeline_tool",
     # director_tools (frontend-delegated: project analysis via Qt)
