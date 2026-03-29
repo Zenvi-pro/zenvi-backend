@@ -22,6 +22,7 @@ COPY requirements.txt requirements-manim.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir -r requirements-manim.txt
 
+ARG CACHE_BUST=1
 COPY . .
 
 EXPOSE 8500
